@@ -138,35 +138,119 @@
     });
   }
 
-  function toFields(state) {
-    return {
-      fields: {
-        payload: { stringValue: encode(state) },
-        updated: { integerValue: String(Date.now()) },
-      },
-    };
+  const SYNC_KEY = 'yesil-saha-bulut-zaman';
+  const QUEUE_KEY = 'yesil-saha-bulut-kuyruk';
+  const DEVICE_KEY = 'yesil-saha-cihaz';
+
+  function deviceId() {
+    try {
+      let id = root.localStorage && root.localStorage.getItem(DEVICE_KEY);
+      if (!id) {
+        id = 'd' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        if (root.localStorage) root.localStorage.setItem(DEVICE_KEY, id);
+      }
+      return id;
+    } catch (e) { return 'device'; }
   }
 
-  function saveCloud(state) {
+  function lastSync() {
+    try { return Number((root.localStorage && root.localStorage.getItem(SYNC_KEY)) || 0); } catch (e) { return 0; }
+  }
+
+  function markSync(ts) {
+    try { if (root.localStorage) root.localStorage.setItem(SYNC_KEY, String(ts || Date.now())); } catch (e) {}
+  }
+
+  function careerUrl(c, uid) {
+    return 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(c.projectId) +
+      '/databases/(default)/documents/users/' + encodeURIComponent(uid) + '/career/current';
+  }
+
+  function adsOn() {
+    try { return !!(root.localStorage && root.localStorage.getItem('yesil-saha-reklamsiz') === '1'); } catch (e) { return false; }
+  }
+
+  function readDoc(data) {
+    const fields = data && data.fields;
+    if (!fields) return null;
+    const payload = fields.payload && fields.payload.stringValue;
+    const state = decode(payload);
+    const updated = Number((fields.updated && fields.updated.integerValue) || 0);
+    return { state: state, updated: updated, removeAds: !!(fields.removeAds && fields.removeAds.booleanValue) };
+  }
+
+  function fetchDoc(session) {
+    const c = config();
+    const url = careerUrl(c, session.localId) + '?key=' + encodeURIComponent(c.apiKey);
+    return fetch(url, { headers: { Authorization: 'Bearer ' + session.idToken } }).then(function (res) {
+      if (res.status === 404) return null;
+      return res.json().then(function (data) {
+        if (!res.ok) throw new Error((data && data.error && data.error.message) || 'firestore');
+        return readDoc(data);
+      });
+    });
+  }
+
+  function writeDoc(session, state, updated) {
+    const c = config();
+    const url = careerUrl(c, session.localId) +
+      '?updateMask.fieldPaths=payload&updateMask.fieldPaths=updated&updateMask.fieldPaths=device&updateMask.fieldPaths=removeAds&updateMask.fieldPaths=version&key=' +
+      encodeURIComponent(c.apiKey);
+    return fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.idToken },
+      body: JSON.stringify({
+        fields: {
+          payload: { stringValue: encode(state) },
+          updated: { integerValue: String(updated) },
+          device: { stringValue: deviceId() },
+          removeAds: { booleanValue: adsOn() || !!(state && state.removeAds) },
+          version: { stringValue: '1.7.1' },
+        },
+      }),
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) throw new Error((data && data.error && data.error.message) || 'firestore');
+        markSync(updated);
+        try { if (root.localStorage) root.localStorage.removeItem(QUEUE_KEY); } catch (e) {}
+        return { ok: true, updated: updated };
+      });
+    });
+  }
+
+  function online() {
+    return typeof navigator === 'undefined' || navigator.onLine !== false;
+  }
+
+  function queue(state) {
+    try {
+      if (root.localStorage) root.localStorage.setItem(QUEUE_KEY, encode(state));
+    } catch (e) {}
+    return { ok: true, queued: true };
+  }
+
+  function saveCloud(state, opts) {
     const c = config();
     if (!c) return Promise.reject(new Error('unconfigured'));
+    opts = opts || {};
+    if (!online()) return Promise.resolve(queue(state));
+    const localT = Number(state && state.cloudUpdated) || Date.now();
     return ensureUser().then(function (session) {
-      const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(c.projectId) +
-        '/databases/(default)/documents/careers/' + encodeURIComponent(session.localId) +
-        '?updateMask.fieldPaths=payload&updateMask.fieldPaths=updated&key=' + encodeURIComponent(c.apiKey);
-      return fetch(url, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer ' + session.idToken,
-        },
-        body: JSON.stringify(toFields(state)),
-      }).then(function (res) {
-        return res.json().then(function (data) {
-          if (!res.ok) throw new Error((data && data.error && data.error.message) || 'firestore');
-          return { ok: true };
-        });
+      return fetchDoc(session).then(function (remote) {
+        const remoteT = remote && remote.updated || 0;
+        const base = lastSync();
+        const both = remote && remote.state && remoteT > base && localT > base && Math.abs(remoteT - localT) > 1500;
+        if (both && !opts.force) {
+          return { ok: false, conflict: true, remote: remote.state, remoteUpdated: remoteT, localUpdated: localT };
+        }
+        if (!opts.force && remote && remoteT > localT) {
+          return { ok: true, remoteNewer: true, remote: remote.state, remoteUpdated: remoteT };
+        }
+        return writeDoc(session, state, Math.max(localT, Date.now()));
       });
+    }).catch(function (err) {
+      queue(state);
+      throw err;
     });
   }
 
@@ -174,19 +258,25 @@
     const c = config();
     if (!c) return Promise.reject(new Error('unconfigured'));
     return ensureUser().then(function (session) {
-      const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(c.projectId) +
-        '/databases/(default)/documents/careers/' + encodeURIComponent(session.localId) +
-        '?key=' + encodeURIComponent(c.apiKey);
-      return fetch(url, { headers: { Authorization: 'Bearer ' + session.idToken } }).then(function (res) {
-        if (res.status === 404) return null;
-        return res.json().then(function (data) {
-          if (!res.ok) throw new Error((data && data.error && data.error.message) || 'firestore');
-          const payload = data && data.fields && data.fields.payload && data.fields.payload.stringValue;
-          return decode(payload);
-        });
+      return fetchDoc(session).then(function (doc) {
+        if (!doc) return null;
+        if (doc.removeAds && root.localStorage) root.localStorage.setItem('yesil-saha-reklamsiz', '1');
+        markSync(doc.updated || Date.now());
+        return doc.state;
       });
     });
   }
+
+  function flushQueue(state) {
+    if (!configured() || !online()) return Promise.resolve({ ok: false });
+    let queued = null;
+    try { queued = root.localStorage && root.localStorage.getItem(QUEUE_KEY); } catch (e) {}
+    const payload = queued ? decode(queued) : state;
+    if (!payload) return Promise.resolve({ ok: true });
+    return saveCloud(payload, { force: true });
+  }
+
+  function syncStamp() { return lastSync(); }
 
   function intField(n) { return { integerValue: String(Math.round(Number(n) || 0)) }; }
   function strField(s) { return { stringValue: String(s == null ? '' : s) }; }
@@ -298,6 +388,9 @@
     configured: configured,
     saveCloud: saveCloud,
     loadCloud: loadCloud,
+    flushQueue: flushQueue,
+    syncStamp: syncStamp,
+    deviceId: deviceId,
     publishBoard: publishBoard,
     fetchBoard: fetchBoard,
     download: download,

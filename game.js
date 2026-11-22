@@ -182,6 +182,17 @@
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }
     catch (e) { toast('Kayıt yazılamadı. Depolama dolu olabilir.'); }
     if (window.YSNotify) window.YSNotify.sync(state, settings);
+    state.cloudUpdated = Date.now();
+    state.removeAds = !!(window.YSAds && window.YSAds.removed());
+    if (window.YSCloud && window.YSCloud.configured()) {
+      window.YSCloud.saveCloud(state).then(function (res) {
+        if (res && res.conflict && window.confirm) {
+          const keep = window.confirm('İki kayıt da değişmiş. Bu cihazdaki kalsın mı?');
+          if (keep) window.YSCloud.saveCloud(state, { force: true });
+          else if (res.remote) adoptCareer(res.remote);
+        }
+      }).catch(function () {});
+    }
   }
 
   function esc(value) {
@@ -484,6 +495,13 @@
       '<button type="button" class="btn ghost" data-act="agent">' + esc(t('hub.agent')) + '</button>' +
       '<button type="button" class="btn ghost" data-act="dream">' + esc(t('hub.dream')) + '</button>' +
       '<button type="button" class="btn ghost" data-act="cups">' + esc(t('hub.cups')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="goods">' + esc(t('hub.goods')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="mylife">' + esc(t('hub.mylife')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="room">' + esc(t('hub.room')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="window">' + esc(t('hub.window')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="rival">' + esc(t('hub.rival')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="club">' + esc(t('hub.club')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="awards">' + esc(t('hub.awards')) + '</button>' +
       (L.cupDue && L.cupDue(state) ? '<button type="button" class="btn ghost" data-act="cup-play">' + esc(t('hub.cup')) + '</button>' : '') +
       (L.europeDue && L.europeDue(state) ? '<button type="button" class="btn ghost" data-act="euro-night">' + esc(t('hub.europe')) + '</button>' : '') +
       (L.superDue && L.superDue(state) ? '<button type="button" class="btn ghost" data-act="super-play">' + esc(t('cups.super')) + '</button>' : '') +
@@ -562,6 +580,8 @@
     return '<div class="page">' + topbar(t('hub.league')) +
       '<p class="eyebrow">' + esc(countryLabel(state.country)) + ' · ' + esc(leagueLabel(state.country, state.tier)) + ' · ' + esc(t('common.season')) + ' ' + state.season + '</p>' +
       renderTable(rows, state.clubId, state.tier, state.country) +
+      '<div class="action-grid"><button type="button" class="btn" data-act="kings" data-kind="goals">' + esc(t('hub.goals')) + '</button>' +
+      '<button type="button" class="btn" data-act="kings" data-kind="assists">' + esc(t('hub.assists')) + '</button></div>' +
       '<h3 class="section">' + esc(t('table.fixtures')) + '</h3><ul class="fixtures">' + items + '</ul></div>';
   }
 
@@ -829,6 +849,7 @@
       '<button type="button" class="btn gold" data-act="import-apply">' + esc(t('set.import')) + '</button>' +
       '<h3 class="section">' + esc(t('set.cloud')) + '</h3>' +
       '<p class="helptext">' + esc(cloudOn ? t('set.cloudOn') : t('set.cloudOff')) + '</p>' +
+      '<p class="fine" id="cloud-sync">' + esc(t('set.cloudSync', { t: Cloud && Cloud.syncStamp && Cloud.syncStamp() ? new Date(Cloud.syncStamp()).toLocaleString() : '—' })) + '</p>' +
       '<div class="action-grid">' +
       '<button type="button" class="btn" data-act="cloud-save"' + (cloudOn && state ? '' : ' disabled') + '>' + esc(t('set.cloudSave')) + '</button>' +
       '<button type="button" class="btn ghost" data-act="cloud-load"' + (cloudOn ? '' : ' disabled') + '>' + esc(t('set.cloudLoad')) + '</button>' +
@@ -1066,6 +1087,157 @@
       '<button type="button" class="btn gold big" data-act="europe-kick">' + esc(t('euro.go')) + '</button></div>';
   }
 
+  function pageGoods() {
+    L.ensurePlus(state);
+    const rows = (L.GOODS || []).map(function (item) {
+      const owned = state.ownedGoods.some(function (g) { return g.id === item.id; });
+      return '<article class="shop"><div><h3>' + esc(L.labelGood(item, state)) + '</h3><p>' + esc(L.txPlus({ tr: item.blurbTr, en: item.blurbEn })) + '</p><p class="fine">' + L.formatMoney(item.price) + (item.upkeep ? ' · ' + L.formatMoney(item.upkeep) + '/hf' : '') + '</p></div>' +
+        '<button type="button" class="btn tiny" data-act="plus" data-kind="buy" data-id="' + item.id + '"' + (owned ? ' disabled' : '') + '>' + (owned ? '✓' : esc(t('shop.title'))) + '</button></article>';
+    }).join('');
+    return '<div class="page">' + topbar(t('hub.goods')) + '<p class="fine">' + L.formatMoney(state.player.money) + ' · ' + (state.fame || 0) + '</p>' + rows + '</div>';
+  }
+
+  function pageMyLife() {
+    L.ensurePlus(state);
+    const rows = state.ownedGoods.map(function (owned) {
+      const item = (L.GOODS || []).filter(function (g) { return g.id === owned.id; })[0];
+      if (!item) return '';
+      return '<article class="card"><h3>' + esc(L.labelGood(item, state)) + '</h3><p class="fine">' + L.formatMoney(item.upkeep || 0) + '/hf</p>' +
+        '<button type="button" class="btn tiny" data-act="plus" data-kind="sell" data-id="' + item.id + '">%55</button></article>';
+    }).join('');
+    return '<div class="page">' + topbar(t('hub.mylife')) + (rows || '<p class="fine">—</p>') + '</div>';
+  }
+
+  function pageRoom() {
+    L.ensurePlus(state);
+    const ev = L.roomEvent(state);
+    const mates = state.squad.map(function (m) {
+      return '<li><b>' + esc(m.name) + '</b><span>' + m.rel + ' · ' + esc(L.traitLine(m)) + '</span></li>';
+    }).join('');
+    return '<div class="page">' + topbar(t('hub.room')) +
+      '<article class="card"><p>' + esc(ev.text) + '</p></article>' +
+      '<button type="button" class="btn" data-act="plus" data-kind="room" data-id="calm">' + esc(t('choice.calm')) + '</button>' +
+      '<button type="button" class="btn" data-act="plus" data-kind="room" data-id="joke">' + esc(t('choice.confident')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="plus" data-kind="room" data-id="snap">' + esc(t('choice.arrogant')) + '</button>' +
+      '<ul class="fixtures">' + mates + '</ul></div>';
+  }
+
+  function pageWindow() {
+    L.ensurePlus(state);
+    L.refreshWindow(state);
+    const deal = state.deadline;
+    const club = deal && L.clubById(deal.clubId);
+    return '<div class="page">' + topbar(t('hub.window')) +
+      '<p class="eyebrow">' + esc(L.txPlus(state.window.label)) + ' · ' + (state.window.days || 0) + '</p>' +
+      '<p>' + esc(L.agentAdvice(state)) + '</p>' +
+      (state.clubWantsSale ? '<p class="news">Kulüp seni satmak istiyor.</p>' : '') +
+      (state.freeAgent ? '<p class="news">Serbestsin.</p>' : '') +
+      '<p class="fine">Serbest kalma ' + L.formatMoney(state.releaseClause || 0) + '</p>' +
+      (deal ? '<article class="card"><h3>' + esc(cname(club)) + '</h3><p>' + L.formatMoney(deal.wage) + ' · ' + deal.days + '</p>' +
+        '<button type="button" class="btn gold" data-act="plus" data-kind="sign">' + esc(t('talk.send')) + '</button>' +
+        '<button type="button" class="btn ghost" data-act="plus" data-kind="stay">' + esc(t('hub.stay')) + '</button></article>' : '') +
+      '<button type="button" class="btn" data-act="loan">' + esc(t('hub.window')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="moves">' + esc(t('hub.window')) + '</button></div>';
+  }
+
+  function pageLoan() {
+    L.ensurePlus(state);
+    if (!state.loanOffer) L.rollLoan(state);
+    const offer = state.loanOffer;
+    const club = offer && L.clubById(offer.clubId);
+    return '<div class="page">' + topbar(t('hub.window')) +
+      (offer ? '<article class="card"><h3>' + esc(cname(club)) + '</h3><p>' + L.formatMoney(offer.wage) + '</p><p class="fine">' + L.formatMoney(offer.buy) + '</p>' +
+        '<button type="button" class="btn gold" data-act="plus" data-kind="loan-yes">' + esc(t('talk.take')) + '</button></article>' : '<p class="fine">—</p>') +
+      '</div>';
+  }
+
+  function pageRole() {
+    L.ensurePlus(state);
+    const pitch = L.positionPitch(state);
+    return '<div class="page">' + topbar(t('profile.title')) +
+      '<article class="card"><p>' + esc(pitch ? pitch.text : '—') + '</p></article>' +
+      (pitch ? '<button type="button" class="btn gold" data-act="plus" data-kind="role-yes">' + esc(t('talk.take')) + '</button>' +
+        '<button type="button" class="btn ghost" data-act="plus" data-kind="role-no">' + esc(t('hub.stay')) + '</button>' : '') +
+      '</div>';
+  }
+
+  function pageAfter() {
+    const summary = state.after;
+    return '<div class="page">' + topbar(t('profile.retireTitle')) +
+      (summary ? '<article class="card"><h3>' + esc(summary.path) + '</h3><p>' + esc(summary.text) + '</p><p class="fine">' + (summary.goals || 0) + ' / ' + (summary.assists || 0) + '</p></article>' :
+        '<button type="button" class="btn" data-act="plus" data-kind="after" data-id="coach">Coach</button>' +
+        '<button type="button" class="btn" data-act="plus" data-kind="after" data-id="pundit">Pundit</button>' +
+        '<button type="button" class="btn gold" data-act="plus" data-kind="after" data-id="ambassador">Ambassador</button>') +
+      '</div>';
+  }
+
+  function pageRival() {
+    L.ensurePlus(state);
+    const r = state.rival;
+    const club = r && L.clubById(r.clubId);
+    return '<div class="page">' + topbar(t('hub.rival')) +
+      '<article class="card"><h2>' + esc(r.name) + '</h2><p>' + r.age + ' · ' + esc(r.nat || '') + ' · ' + esc(cname(club)) + '</p>' +
+      '<p>' + (r.goals || 0) + ' / ' + (r.assists || 0) + '</p><p class="fine">' + (state.seasonGoals || 0) + ' / ' + (state.seasonAssists || 0) + '</p></article></div>';
+  }
+
+  function pageKings() {
+    L.ensurePlus(state);
+    const kind = state.boardKind === 'assists' ? 'assists' : 'goals';
+    const rows = L.sortedBoard(L.scorerRows(state, state.browseCountry || state.country, state.browseTier || state.tier), kind);
+    const list = rows.slice(0, 12).map(function (row, i) {
+      const club = L.clubById(row.clubId);
+      return '<li class="' + (row.me ? 'me' : '') + '"><b>' + (i + 1) + '. ' + esc(row.name) + '</b><span>' + (kind === 'assists' ? row.assists : row.goals) + ' · ' + esc(cshort(club)) + '</span></li>';
+    }).join('');
+    return '<div class="page">' + topbar(kind === 'assists' ? t('hub.assists') : t('hub.goals')) + '<ul class="fixtures">' + list + '</ul></div>';
+  }
+
+  function pageClub() {
+    const id = state.lookClub || state.clubId;
+    const pack = L.clubSquad(id, state.season || 1);
+    const club = L.clubById(id);
+    if (!pack || !club) return '<div class="page">' + topbar(t('hub.club')) + '</div>';
+    const kit = function (which) {
+      return '<div class="kit ' + pack.kit[which] + '" style="--a:' + pack.kit.color + ';--b:' + pack.kit.second + '"></div>';
+    };
+    const list = pack.squad.map(function (p) {
+      return '<li><button type="button" data-act="player" data-id="' + p.num + '"><b>' + p.num + ' ' + esc(p.name) + (p.captain ? ' ©' : '') + '</b><span>' + p.pos + ' · ' + p.nat + ' · ' + p.age + ' · ' + p.ovr + '</span></button></li>';
+    }).join('');
+    return '<div class="page">' + topbar(cname(club)) +
+      '<p>' + esc(pack.coach.name) + ' · ' + pack.coach.nat + ' · ' + pack.coach.formation + ' · ' + pack.coach.style + '</p>' +
+      '<div class="boss-row">' + kit('home') + kit('away') + '<div><b>' + esc(pack.stadium.name) + '</b><p class="fine">' + pack.stadium.capacity + '</p></div></div>' +
+      '<ul class="fixtures">' + list + '</ul></div>';
+  }
+
+  function pagePlayer() {
+    const pack = L.clubSquad(state.lookClub || state.clubId, state.season || 1);
+    const p = pack && pack.squad.filter(function (row) { return String(row.num) === String(state.lookNum); })[0];
+    if (!p) return '<div class="page">' + topbar('—') + '</div>';
+    return '<div class="page">' + topbar(p.name) +
+      '<article class="card"><h2>' + esc(p.name) + '</h2><p>' + p.nat + ' · ' + p.pos + ' · ' + p.age + '</p><p>' + p.ovr + ' / ' + p.pot + '</p><p class="fine">' + p.goals + ' · ' + p.assists + (p.injured ? ' · +' : '') + '</p></article></div>';
+  }
+
+  function pageAwards() {
+    const awards = L.globalAwards(state);
+    const list = awards.top30.slice(0, 10).map(function (row, i) {
+      return '<li class="' + (row.me ? 'me' : '') + '"><b>' + (i + 1) + '. ' + esc(row.name) + '</b><span>' + row.nat + '</span></li>';
+    }).join('');
+    return '<div class="page">' + topbar(t('hub.awards')) +
+      '<article class="card"><h2>Altın Yıldız Ödülü</h2><p>' + esc(awards.star ? awards.star.name : '') + '</p><p class="fine">' + (awards.meAt >= 0 ? awards.meAt + 1 : '—') + '</p></article>' +
+      '<p>Genç Yıldız: ' + esc(awards.rising ? awards.rising.name : '—') + '</p>' +
+      '<p>Altın Eldiven: ' + esc(awards.glove ? awards.glove.name : '—') + '</p>' +
+      '<p>Yılın Golü: ' + esc(awards.goal ? awards.goal.name : '—') + '</p>' +
+      '<p>Yılın Teknik Direktörü: ' + esc(awards.coach ? awards.coach.name : '—') + '</p>' +
+      '<ul class="fixtures">' + list + '</ul></div>';
+  }
+
+  function pageMoves() {
+    const lines = L.transferNews(state);
+    const list = lines.map(function (row) {
+      return '<li><b>' + esc(row.name) + '</b><span>' + esc(L.txPlus({ tr: row.textTr, en: row.textEn })) + '</span></li>';
+    }).join('');
+    return '<div class="page">' + topbar(t('hub.window')) + '<ul class="fixtures">' + list + '</ul></div>';
+  }
+
   function htmlFor(name) {
     if (name === 'menu') return pageMenu();
     if (name === 'create') return pageCreate();
@@ -1099,6 +1271,19 @@
     if (name === 'dream') return pageDream();
     if (name === 'cups') return pageCups();
     if (name === 'euro-night') return pageEuroNight();
+    if (name === 'goods') return pageGoods();
+    if (name === 'mylife') return pageMyLife();
+    if (name === 'room') return pageRoom();
+    if (name === 'window') return pageWindow();
+    if (name === 'loan') return pageLoan();
+    if (name === 'role') return pageRole();
+    if (name === 'after') return pageAfter();
+    if (name === 'rival') return pageRival();
+    if (name === 'kings') return pageKings();
+    if (name === 'club') return pageClub();
+    if (name === 'player') return pagePlayer();
+    if (name === 'awards') return pageAwards();
+    if (name === 'moves') return pageMoves();
     if (name === 'cabinet') return pageCabinet();
     if (name === 'milli') return pageMilli();
     return pageMenu();
@@ -1191,6 +1376,8 @@
       return;
     }
     save();
+    if (window.YSTelemetry) window.YSTelemetry.logEvent('match_played', { competition: stats.competition || 'league' });
+    if (state.phase === 'season' && window.YSTelemetry) window.YSTelemetry.logEvent('season_end', { season: state.season });
     if (window.YSAds) window.YSAds.afterMatch();
     if (res.match && (res.match.goals > 0 || res.match.result === 'win')) Sfx.crowd();
     if (res.match && res.match.result === 'win') Sfx.cheer();
@@ -1318,7 +1505,7 @@
 
   function grantReward(kind) {
     const Ads = window.YSAds;
-    if (!Ads || Ads.removed()) { toast(t('ads.closed')); return; }
+    if (!Ads) { toast(t('ads.closed')); return; }
     if (!Ads.isNative()) { toast(t('ads.none')); return; }
     const amounts = (window.YESIL_ADS && window.YESIL_ADS.rewards) || { energy: 30, money: 400 };
     Ads.showRewarded().then(function (ok) {
@@ -1332,6 +1519,7 @@
         state.lastMatch.doubled = true;
       }
       save();
+      if (window.YSTelemetry) window.YSTelemetry.logEvent('ad_watched', { kind: kind || 'reward' });
       toast(t('ads.got'));
       if (view === 'ads') go('ads');
     });
@@ -1343,9 +1531,11 @@
     const id = Bill.ids()[which];
     Bill.purchase(id).then(function (res) {
       if (!res || !res.ok) {
-        toast(t(res && res.reason === 'canceled' ? 'ads.canceled' : 'ads.unavailable'));
+        const pending = res && (res.reason === 'store_pending' || res.reason === 'not_available');
+        toast(t(res && res.reason === 'canceled' ? 'ads.canceled' : pending ? 'ads.storeLater' : 'ads.unavailable'));
         return;
       }
+      if (which === 'removeAds' && window.YSTelemetry) window.YSTelemetry.logEvent('remove_ads', { product: 'remove_ads' });
       const owned = res.owned || [];
       if (which === 'removeAds' || owned.indexOf(Bill.ids().removeAds) >= 0) {
         if (window.YSAds) window.YSAds.setRemoved(true);
@@ -1720,6 +1910,37 @@
     if (act === 'cabinet') { go('cabinet', 'hub'); return; }
     if (act === 'milli-open') { go('milli', 'hub'); return; }
     if (act === 'phone') { go('phone', 'hub'); return; }
+    if (act === 'goods') { go('goods', 'hub'); return; }
+    if (act === 'mylife') { go('mylife', 'hub'); return; }
+    if (act === 'room') { go('room', 'hub'); return; }
+    if (act === 'window') { go('window', 'hub'); return; }
+    if (act === 'loan') { go('loan', 'window'); return; }
+    if (act === 'role') { go('role', 'profile'); return; }
+    if (act === 'rival') { go('rival', 'hub'); return; }
+    if (act === 'club') { state.lookClub = state.clubId; go('club', 'hub'); return; }
+    if (act === 'awards') { go('awards', 'hub'); return; }
+    if (act === 'moves') { go('moves', 'window'); return; }
+    if (act === 'kings') { state.boardKind = btn.dataset.kind || 'goals'; go('kings', 'table'); return; }
+    if (act === 'player') { state.lookNum = btn.dataset.id; go('player', 'club'); return; }
+    if (act === 'plus') {
+      const kind = btn.dataset.kind;
+      const id = btn.dataset.id;
+      let res = { message: '' };
+      if (kind === 'buy') res = L.buyGood(state, id);
+      else if (kind === 'sell') res = L.sellGood(state, id);
+      else if (kind === 'room') res = L.roomChoose(state, id);
+      else if (kind === 'sign') res = L.acceptDeadline(state);
+      else if (kind === 'stay') res = L.stayPut(state);
+      else if (kind === 'loan-yes') res = L.acceptLoan(state);
+      else if (kind === 'role-yes') res = L.acceptPosition(state);
+      else if (kind === 'role-no') res = L.declinePosition(state);
+      else if (kind === 'after') res = L.chooseAfter(state, id);
+      if ((kind === 'sign' || kind === 'loan-yes') && window.YSTelemetry) window.YSTelemetry.logEvent('transfer', { kind: kind });
+      save();
+      if (res && res.message) toast(say(res.message));
+      go(kind === 'after' ? 'after' : view);
+      return;
+    }
     if (act === 'partner') { go('partner', 'life'); return; }
     if (act === 'agent') { go('agent', 'hub'); return; }
     if (act === 'dream') { go('dream', 'hub'); return; }
@@ -1901,9 +2122,9 @@
     if (act === 'retire') { askRetire = true; go('profile', 'hub'); return; }
     if (act === 'retire-no') { askRetire = false; go('profile', 'hub'); return; }
     if (act === 'retire-yes') {
-      L.retireCareer(state);
       save();
-      go('retired');
+      go('after');
+      return;
     }
   }
 
@@ -1945,6 +2166,10 @@
     AppPlugin.addListener('backButton', function () {
       const stay = window.YESIL && window.YESIL.onBack && window.YESIL.onBack();
       if (!stay && AppPlugin.exitApp) AppPlugin.exitApp();
+    });
+    AppPlugin.addListener('pause', function () {
+      if (state) save();
+      if (window.YSCloud && window.YSCloud.flushQueue) window.YSCloud.flushQueue(state).catch(function () {});
     });
   }
 
@@ -2007,6 +2232,9 @@
     if (window.YSAudio) window.YSAudio.configure(settings);
     if (window.YSNotify && settings.notifyAsked && settings.notify !== false) window.YSNotify.sync(state, settings);
     bindAndroidBack();
+    window.addEventListener('online', function () {
+      if (window.YSCloud && window.YSCloud.flushQueue) window.YSCloud.flushQueue(state).catch(function () {});
+    });
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('./sw.js').catch(function () {});

@@ -106,7 +106,7 @@
 
   function showRewarded() {
     const admob = plugin();
-    if (!admob || removed()) return Promise.resolve(false);
+    if (!admob) return Promise.resolve(false);
     const earned = listen('onRewardedVideoAdReward');
     return admob.prepareRewardVideoAd({
       adId: cfg().rewarded,

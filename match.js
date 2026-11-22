@@ -259,7 +259,9 @@
         const bits = (L.ratingParts ? L.ratingParts(Object.assign({ result: L.teamGoals(stats) === (stats.oppGoals || 0) ? 'draw' : L.teamGoals(stats) > (stats.oppGoals || 0) ? 'win' : 'loss', pos: state.player.pos }, stats)) : []).map(function (p) {
           return '<li><b>' + p.id + '</b><span>' + (Math.round(p.n * 10) / 10) + '</span></li>';
         }).join('');
-        showCard('<p class="eyebrow">' + tx('flow.full', 'Maç sonu') + '</p><h2>' + L.teamGoals(stats) + ' – ' + (stats.oppGoals || 0) + '</h2><ul class="fixtures">' + bits + '</ul>', tx('flow.go', 'Devam'));
+        const motm = L.pickMotm ? L.pickMotm(state) : null;
+        const motmLine = motm ? '<p class="news">' + tx('flow.motm', 'Maçın adamı') + ': ' + motm.name + ' · ' + motm.rating + '</p>' : '';
+        showCard('<p class="eyebrow">' + tx('flow.full', 'Maç sonu') + '</p><h2>' + L.teamGoals(stats) + ' – ' + (stats.oppGoals || 0) + '</h2>' + motmLine + '<ul class="fixtures">' + bits + '</ul>', tx('flow.go', 'Devam'));
         return;
       }
       if (stage === 'office' && L.officeCard) {
@@ -328,7 +330,11 @@
         }
         if (ev.type === 'opp' || ev.type === 'solo') {
           L.applyEvent(live.stats, ev.type);
-          const text = tx(ev.key || (ev.type === 'opp' ? 'flow.opp' : 'flow.solo'), ev.type === 'opp' ? 'Rakip golü' : 'Takım golü');
+          let text = tx(ev.key || (ev.type === 'opp' ? 'flow.opp' : 'flow.solo'), ev.type === 'opp' ? 'Rakip golü' : 'Takım golü');
+          if (L.matchScorer) {
+            const who = L.matchScorer(ev.type === 'opp' ? live.oppId : state.clubId, state.season, ev.minute, 'st');
+            if (who && who.name && who.name !== state.player.name) text = who.name + ' · ' + text;
+          }
           if (!live.scorers) live.scorers = [];
           live.scorers.push({ minute: ev.minute, text: text });
           pushTick(ev.minute, text);
@@ -738,6 +744,10 @@
       let kind;
       if (info.kind === 'pass') {
         kind = 'pass';
+        if (state.squad && state.squad[0]) {
+          const mate = state.squad[0];
+          scene.mateRel = mate.personality === 'selfish' ? Math.max(0, mate.rel - 30) : mate.rel;
+        }
         outcome = L.resolvePass(scene, swipe, attrs, Math.random, state.player.pos);
       } else {
         kind = info.kind === 'selfish' ? 'selfish' : 'shot';

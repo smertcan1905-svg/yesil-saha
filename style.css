@@ -397,6 +397,12 @@ input {
   font-weight: 700;
 }
 .boss-row { display: flex; gap: 10px; align-items: center; }
+.kit { width: 54px; height: 68px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.35); }
+.kit.stripes { background: repeating-linear-gradient(90deg, var(--a) 0 8px, var(--b) 8px 16px); }
+.kit.hoops { background: repeating-linear-gradient(var(--a) 0 8px, var(--b) 8px 16px); }
+.kit.plain { background: var(--a); }
+.kit.sash { background: linear-gradient(135deg, var(--a) 40%, var(--b) 40% 60%, var(--a) 60%); }
+.kit.halves { background: linear-gradient(90deg, var(--a) 50%, var(--b) 50%); }
 .euro-night {
   min-height: 100%;
   background: radial-gradient(circle at 50% 18%, #166534, #07140d 68%);

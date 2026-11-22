@@ -1,10 +1,11 @@
 /* Çevrimdışı önbellek. Ağ varsa taze dosya, yoksa kayıt. */
-const CACHE = 'yesil-saha-v2';
+const CACHE = 'yesil-saha-v3';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './logic.js',
+  './extra.js',
   './match.js',
   './game.js',
   './manifest.webmanifest',

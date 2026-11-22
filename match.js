@@ -28,6 +28,7 @@
     let diveAmt = 0;
     let diveDir = 1;
     let ballSpin = 0;
+    let headerPhase = 0;
     const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
     function speed() {
@@ -63,8 +64,10 @@
       const me = L.clubById(state.clubId);
       const opp = L.clubById(live.oppId);
       const score = document.getElementById('match-score');
+      const left = live.compName ? live.compName : (me ? me.short : 'Sen');
+      const right = live.displayOpp || (opp ? opp.short : 'Rakip');
       if (score) {
-        score.textContent = (me ? me.short : 'Sen') + '  ' + L.teamGoals(live.stats) + ' – ' + live.stats.oppGoals + '  ' + (opp ? opp.short : 'Rakip');
+        score.textContent = left + '  ' + L.teamGoals(live.stats) + ' – ' + live.stats.oppGoals + '  ' + right;
       }
       const ev = live.events[Math.min(live.cursor, Math.max(0, live.events.length - 1))];
       const minute = document.getElementById('match-minute');
@@ -74,7 +77,7 @@
       if (ev && ev.type === 'chance') {
         const chances = live.events.filter(function (e) { return e.type === 'chance'; });
         const idx = chances.indexOf(ev);
-        const labels = { sut: 'Şut', pas: 'Pas', frikik: 'Frikik' };
+        const labels = { sut: 'Şut', pas: 'Pas', frikik: 'Frikik', calim: 'Çalım', orta: 'Orta', kafa: 'Kafa', penalti: 'Penaltı', savunma: 'Top kapma' };
         sub.textContent = 'Pozisyon ' + (idx + 1) + '/' + chances.length + ' · ' + (labels[ev.scene.type] || 'Şut');
       } else if (ev && ev.type === 'opp') sub.textContent = 'Karşı atak';
       else if (ev && ev.type === 'solo') sub.textContent = 'Takım atağı';
@@ -82,9 +85,34 @@
 
     function chanceHint(scene) {
       if (!scene) return 'Topu hedefe kaydır.';
-      if (scene.type === 'pas') return 'Beyaz formaya kaydır veya üzerine dokun.';
-      if (scene.type === 'frikik') return 'Barajın açığından kaleye kaydır. Altın bölge ideal güç.';
+      if (scene.type === 'pas' || scene.type === 'orta') return scene.type === 'orta'
+        ? 'Ortayı beyaz formaya doğru kaydır.'
+        : 'Beyaz formaya kaydır veya üzerine dokun.';
+      if (scene.type === 'frikik') return 'Frikik virajlı gider. Direğin dışından kaydır, frikik içeri büker.';
+      if (scene.type === 'calim') return 'Savunmacının yanından kaydır. Üstüne değil, çevresinden.';
+      if (scene.type === 'kafa') return 'Çubuk yeşil bölgedeyken dokun.';
+      if (scene.type === 'penalti') return 'Penaltı. Kalecinin ters köşesine kaydır.';
+      if (scene.type === 'savunma') return 'Top kap. Koşan rakibe doğru kaydır.';
       return 'Topa bas, kaleye kaydır. Altın bölge ideal güç.';
+    }
+
+    function commentLine(ev) {
+      const live = state.live;
+      if (!live || !ev) return '';
+      const us = L.teamGoals(live.stats);
+      const them = live.stats.oppGoals;
+      const names = {
+        sut: 'Şut alanı açılıyor.',
+        pas: 'Pas hattı aranıyor.',
+        orta: 'Kanattan orta geliyor.',
+        calim: 'Çalım denenecek.',
+        kafa: 'Hava topu, kafa vakti.',
+        penalti: 'Penaltı noktası.',
+        frikik: 'Frikik düdüğü.',
+        savunma: 'Karşı atak! Topu kap.',
+      };
+      const bit = ev.scene ? (names[ev.scene.type] || 'Pozisyon.') : (ev.type === 'opp' ? 'Rakip hücumda.' : 'Takım öne çıktı.');
+      return ev.minute + "'  " + us + '–' + them + '  ·  ' + bit;
     }
 
     function showBanner(waiting) {
@@ -114,6 +142,12 @@
     function placeUser(scene) {
       const gcx = scene.goal.x + scene.goal.w / 2;
       const mouth = scene.goal.y + scene.goal.h;
+      if (scene.type === 'savunma') {
+        return {
+          x: L.clamp((scene.ball.x + gcx) / 2, 36, L.LOG_W - 36),
+          y: L.clamp(scene.ball.y - 58, 90, L.LOG_H - 40),
+        };
+      }
       const vx = scene.ball.x - gcx;
       const vy = scene.ball.y - mouth;
       const len = Math.hypot(vx, vy) || 1;
@@ -148,6 +182,20 @@
         if (ev.type === 'opp') sfx('miss'); else sfx('goal');
         if (ev.type === 'solo') { shake = 0.6; flash = 0.4; }
         armAuto();
+        return;
+      }
+      if (live.flowCursor !== live.cursor) {
+        live.flowCursor = live.cursor;
+        phase = 'flow';
+        const line = commentLine(ev);
+        hint(line);
+        const note = document.getElementById('match-comment');
+        if (note) note.textContent = line;
+        updateHud();
+        clearAuto();
+        timer = setTimeout(function () {
+          if (!dead && phase === 'flow') enter();
+        }, Math.max(50, 620 / speed()));
         return;
       }
       phase = 'aim';
@@ -255,22 +303,74 @@
         flash = 0.55;
         burst(ball.x, ball.y);
         sfx('goal');
-        try { if (navigator.vibrate) navigator.vibrate(pending.outcome === 'goal' ? [18, 24, 18] : 12); } catch (e) {}
+        buzz(pending.outcome === 'goal' ? [18, 30, 18] : 12);
       } else if (pending.outcome === 'save' || pending.outcome === 'weak' || pending.outcome === 'wall') sfx('save');
       else if (pending.outcome === 'pass') sfx('pass');
       else sfx('miss');
+    }
+
+    function buzz(pattern) {
+      try {
+        if (hooks.vibrate && hooks.vibrate() === false) return;
+        if (navigator.vibrate) navigator.vibrate(pattern);
+      } catch (e) {}
+    }
+
+    function headerAcc() {
+      const t = (Math.sin(headerPhase) + 1) / 2;
+      return 1 - Math.min(1, Math.abs(t - 0.78) / 0.34);
     }
 
     function beginKick(swipe) {
       const ev = currentEvent();
       if (!ev || !ev.scene || phase !== 'aim') return;
       const scene = ev.scene;
+      const attrs = state.live.attrs;
+      if (scene.type === 'kafa' && L.resolveHeader) {
+        const outcome = L.resolveHeader(scene, headerAcc(), attrs, Math.random);
+        pending = { kind: 'header', outcome: outcome.outcome, aimX: outcome.aimX || scene.ball.x, applied: false };
+        kickAnim = 1;
+        sfx('kick');
+        buzz(10);
+        startFlight(endPoint(scene, outcome.outcome, pending.aimX), commitOutcome);
+        return;
+      }
+      if (scene.type === 'calim' && L.resolveDribble) {
+        const outcome = L.resolveDribble(scene, swipe, attrs, Math.random);
+        pending = { kind: 'dribble', outcome: outcome.outcome, aimX: scene.ball.x, applied: false };
+        kickAnim = 1;
+        sfx('kick');
+        buzz(10);
+        const def = scene.defenders && scene.defenders[0];
+        const past = def
+          ? { x: L.clamp(scene.ball.x + (scene.ball.x < def.x ? -40 : 40), 30, L.LOG_W - 30), y: scene.ball.y - 74 }
+          : { x: scene.ball.x, y: scene.ball.y - 60 };
+        const cut = def ? { x: def.x, y: def.y } : past;
+        startFlight(outcome.outcome === 'lost' ? cut : past, commitOutcome);
+        return;
+      }
+      if (scene.type === 'savunma' && L.resolveTackle) {
+        const outcome = L.resolveTackle(scene, swipe, attrs, Math.random);
+        pending = { kind: 'tackle', outcome: outcome.outcome, aimX: scene.ball.x, applied: false, concede: outcome.outcome === 'lost' };
+        kickAnim = 1;
+        sfx('kick');
+        buzz(10);
+        const atk = scene.attacker || (scene.defenders && scene.defenders[0]) || scene.ball;
+        startFlight({ x: atk.x, y: atk.y }, function () {
+          if (pending && pending.concede && state.live) {
+            L.applyEvent(state.live.stats, 'opp');
+            pending.concede = false;
+            updateHud();
+          }
+          commitOutcome();
+        });
+        return;
+      }
       const info = L.classifyAction(scene, swipe);
       if (info.kind === 'none') {
         hint('Biraz daha net kaydır.');
         return;
       }
-      const attrs = state.live.attrs;
       let outcome;
       let kind;
       if (info.kind === 'pass') {
@@ -355,6 +455,10 @@
       const ev = currentEvent();
       if (!ev || !ev.scene) return;
       const moved = Math.hypot(p.x - start.ox, p.y - start.oy);
+      if (ev.scene.type === 'kafa') {
+        beginKick({ x1: ev.scene.ball.x, y1: ev.scene.ball.y, x2: p.x, y2: p.y });
+        return;
+      }
       if (moved < 14) {
         if (ev.scene.teammate && Math.hypot(p.x - ev.scene.teammate.x, p.y - ev.scene.teammate.y) < 36) {
           const swipe = L.tapPassSwipe(ev.scene);
@@ -389,6 +493,7 @@
       shake = Math.max(0, shake - dt * 1.8);
       flash = Math.max(0, flash - dt * 1.4);
       ballSpin += dt * (phase === 'fly' ? 9 : 1.4);
+      if (phase === 'aim') headerPhase += dt * 3.1;
       const shooting = phase === 'fly' && pending && pending.kind !== 'pass';
       const wantDive = shooting ? 1 : 0;
       diveAmt += (wantDive - diveAmt) * Math.min(1, dt * (shooting ? 9 : 2.2));
@@ -840,6 +945,20 @@
         ctx.font = '700 10px Segoe UI, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('SEN', userPos.x, userPos.y + 24);
+        if (phase === 'aim' && scene.type === 'kafa') {
+          const t = (Math.sin(headerPhase) + 1) / 2;
+          ctx.save();
+          ctx.fillStyle = 'rgba(0,0,0,0.45)';
+          roundRect(70, 520, 220, 16, 8);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(157,255,198,0.9)';
+          ctx.fillRect(70 + 220 * 0.62, 522, 36, 12);
+          ctx.fillStyle = '#ffd56a';
+          ctx.beginPath();
+          ctx.arc(70 + 220 * t, 528, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
         if (phase === 'aim') {
           const pulse = 1 + Math.sin(time / 160) * 0.1;
           ctx.save();

@@ -121,6 +121,21 @@
     { ball: [246, 470], gk: [210, 56], defs: [], wall: [[156, 210], [186, 204], [216, 210]], mate: [78, 380], close: false, advanced: false },
   ];
 
+  const CALIM = [
+    { ball: [180, 360], gk: [180, 56], defs: [[180, 270]], mate: [300, 320], close: false, advanced: false },
+    { ball: [120, 340], gk: [200, 56], defs: [[150, 250]], mate: [260, 280], close: false, advanced: true },
+  ];
+
+  const KAFA = [
+    { ball: [180, 210], gk: [168, 56], defs: [[210, 200]], mate: [90, 300], close: true, advanced: false },
+    { ball: [200, 188], gk: [210, 56], defs: [], mate: [120, 280], close: true, advanced: false },
+  ];
+
+  const SAVUNMA = [
+    { ball: [180, 250], gk: [180, 56], defs: [[176, 320]], mate: [70, 400], close: true, advanced: false },
+    { ball: [140, 230], gk: [200, 56], defs: [[150, 310]], mate: [280, 380], close: true, advanced: false },
+  ];
+
   function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
 
   function average(nums) {
@@ -217,8 +232,14 @@
 
   function matchAttrs(state) {
     const a = trainedAttrs(state);
-    const p = energyPenalty(state);
+    let p = energyPenalty(state);
+    const morale = state.player && state.player.morale;
+    if (typeof morale === 'number' && morale < 40) p += 4;
+    if (typeof morale === 'number' && morale >= 80) p = Math.max(0, p - 2);
     for (let i = 0; i < ATTRS.length; i++) a[ATTRS[i]] = Math.max(1, a[ATTRS[i]] - p);
+    if (typeof morale === 'number' && morale >= 80) {
+      for (let i = 0; i < ATTRS.length; i++) a[ATTRS[i]] = Math.min(99, a[ATTRS[i]] + 1);
+    }
     return a;
   }
 
@@ -360,7 +381,19 @@
       restedThisWeek: false,
       sawTutorial: false,
       retired: false,
+      seasonHistory: [],
+      trophies: [],
     };
+    state.player.morale = 58;
+    state.player.injured = 0;
+    state.player.contractYears = 2;
+    state.player.goalBonus = 40;
+    state.player.partner = null;
+    state.player.sponsor = null;
+    state.milli = { caps: 0, goals: 0 };
+    state.milliInvite = null;
+    state.cup = { alive: true, round: 0, name: tier >= 3 ? 'İlçe Kupası' : tier === 2 ? 'Anadolu Kupası' : 'Ulusal Kupa', playedWeek: 0 };
+    state.europe = tier === 1 ? { alive: true, round: 0, playedWeek: 0 } : null;
     const pool = CLUBS.filter(function (c) { return c.tier === tier; });
     const club = pool[Math.floor(rngNext(state) * pool.length)];
     state.clubId = club.id;
@@ -501,7 +534,12 @@
   function jitter(rng, amount) { return (rng() - 0.5) * amount; }
 
   function buildChance(type, state, rng) {
-    const pool = type === 'pas' ? PASSES : type === 'frikik' ? FKS : SHOTS;
+    const pool = type === 'pas' || type === 'orta' ? PASSES
+      : type === 'frikik' ? FKS
+      : type === 'calim' ? CALIM
+      : type === 'kafa' || type === 'penalti' ? KAFA
+      : type === 'savunma' ? SAVUNMA
+      : SHOTS;
     const tpl = pool[Math.floor(rng() * pool.length)];
     const ball = {
       x: clamp(Math.round(tpl.ball[0] + jitter(rng, 14)), 40, 320),
@@ -554,18 +592,20 @@
       pressure: pressure,
       gkSkill: gkSkill,
       mateAdvanced: !!(tpl.advanced && teammate && teammate.y < ball.y - 30),
+      attacker: type === 'savunma' && defenders[0] ? defenders[0] : null,
     };
   }
 
   function rollType(pos, rng) {
     const x = rng();
-    if (pos === 'forvet') {
-      if (x < 0.14) return 'frikik';
-      if (x < 0.40) return 'pas';
-      return 'sut';
+    const rows = pos === 'forvet'
+      ? [['penalti', 0.05], ['kafa', 0.12], ['orta', 0.08], ['calim', 0.14], ['frikik', 0.1], ['pas', 0.16], ['savunma', 0.1]]
+      : [['penalti', 0.03], ['kafa', 0.07], ['orta', 0.14], ['calim', 0.12], ['frikik', 0.08], ['pas', 0.2], ['savunma', 0.14]];
+    let acc = 0;
+    for (let i = 0; i < rows.length; i++) {
+      acc += rows[i][1];
+      if (x < acc) return rows[i][0];
     }
-    if (x < 0.12) return 'frikik';
-    if (x < 0.62) return 'pas';
     return 'sut';
   }
 
@@ -709,7 +749,15 @@
     const m = shotModel(scene, swipe, attrs);
     if (!m.ok) return { outcome: 'scuff', power: m.power, aimX: m.aimX, onTarget: false, band: m.band };
     const error = (rng() - rng()) * m.spread;
-    const finalX = m.aimX + error;
+    let finalX = m.aimX + error;
+    if (scene.type === 'frikik') {
+      const center = scene.goal.x + scene.goal.w / 2;
+      const bend = (attrs.frikik / 100) * 28;
+      finalX += m.aimX < center ? bend * 0.45 : -bend * 0.45;
+    }
+    if (scene.type === 'penalti') {
+      finalX = m.aimX + error * 0.55;
+    }
     const onTarget = finalX >= m.left && finalX <= m.right;
     if (scene.type === 'frikik' && scene.wall && scene.wall.length && m.band !== 'weak') {
       const lift = 64 - attrs.guc * 0.14 - attrs.frikik * 0.1;
@@ -916,6 +964,9 @@
         tier: club.tier,
         wage: offerWage(state, club.tier, mult),
         kind: kind,
+        years: 3,
+        bonus: Math.round(offerWage(state, club.tier, mult) * 2 / 10) * 10,
+        goalBonus: club.tier === 1 ? 200 : club.tier === 2 ? 90 : 40,
       });
     }
     const higher = CLUBS.filter(function (c) { return c.tier === tier - 1; })
@@ -993,6 +1044,26 @@
       state.player.rel.takim = clamp(state.player.rel.takim + 4, 0, 100);
     }
     state.history.seasons += 1;
+    state.trophies = state.trophies || [];
+    state.seasonHistory = state.seasonHistory || [];
+    const seasonAvg = average(state.seasonRatings);
+    if (seasonAvg >= 7.8 && rank <= 3) {
+      award = award ? award + ' · Yılın oyuncusu' : 'Yılın oyuncusu';
+      state.trophies.push({ name: 'Yılın oyuncusu', season: state.season });
+      state.history.playerAwards = (state.history.playerAwards || 0) + 1;
+    }
+    if (champion) state.trophies.push({ name: tierName(tierBefore) + ' şampiyonluğu', season: state.season });
+    if (state.seasonGoals >= 6) state.trophies.push({ name: 'Gol krallığı', season: state.season });
+    state.seasonHistory.push({
+      season: state.season,
+      clubId: state.clubId,
+      tier: tierBefore,
+      rank: rank,
+      goals: state.seasonGoals,
+      assists: state.seasonAssists,
+      award: award,
+    });
+    if (state.player.contractYears) state.player.contractYears = Math.max(0, state.player.contractYears - 1);
     const club = clubById(state.clubId);
     const clubName = club ? club.name : 'Takımın';
     let headline;
@@ -1047,12 +1118,16 @@
     const list = CLUBS.filter(function (c) { return c.tier === targetTier && c.id !== state.clubId; });
     if (!list.length) return null;
     const club = list[Math.floor(rngNext(state) * list.length)];
+    const offerWageNow = offerWage(state, club.tier, club.tier < state.tier ? 1.05 : 1.15);
     const offer = {
       id: 'inbox-' + state.season + '-' + state.week + '-' + club.id,
       clubId: club.id,
       tier: club.tier,
-      wage: offerWage(state, club.tier, club.tier < state.tier ? 1.05 : 1.15),
+      wage: offerWageNow,
       kind: club.tier < state.tier ? 'yuksel' : 'yatay',
+      years: 3,
+      bonus: Math.round(offerWageNow * 2 / 10) * 10,
+      goalBonus: club.tier === 1 ? 200 : 80,
     };
     state.inboxOffer = offer;
     addNews(state, club.name + ' seni soruyor.');
@@ -1084,9 +1159,12 @@
       tired: !!report.tired,
       result: result,
     });
-    if (fix.home) applyScoreline(state, state.clubId, fix.oppId, us, them);
-    else applyScoreline(state, fix.oppId, state.clubId, them, us);
-    simRoundRemainder(state, state.week - 1);
+    const comp = report.competition || null;
+    if (!comp) {
+      if (fix.home) applyScoreline(state, state.clubId, fix.oppId, us, them);
+      else applyScoreline(state, fix.oppId, state.clubId, them, us);
+      simRoundRemainder(state, state.week - 1);
+    }
 
     state.player.energy = clamp(state.player.energy - 16, 0, 100);
     let earn = state.wage;
@@ -1094,8 +1172,21 @@
     else if (result === 'draw') earn += Math.round(state.wage * 0.2);
     earn += (report.goals || 0) * 80;
     earn += (report.assists || 0) * 50;
+    if (state.player.sponsor && rating >= (state.player.sponsor.minRating || 6)) {
+      earn += state.player.sponsor.pay;
+      state.player.sponsor.weeks -= 1;
+      if (state.player.sponsor.weeks <= 0) {
+        addNews(state, state.player.sponsor.name + ' sponsorluğu bitti.');
+        state.player.sponsor = null;
+      }
+    }
+    if (state.player.goalBonus) earn += (report.goals || 0) * state.player.goalBonus;
     state.player.money += earn;
     state.history.earnings += earn;
+    if (typeof state.player.morale === 'number') {
+      const mood = result === 'win' ? 4 : result === 'loss' ? -3 : 0;
+      state.player.morale = clamp(state.player.morale + mood + Math.round((rating - 6) * 1.2), 0, 100);
+    }
 
     const deltas = {
       hoca: bumpRel(state, 'hoca', (rating - 6.2) * 3.1 + ((report.goals || 0) > 0 ? 1 : 0)),
@@ -1129,12 +1220,49 @@
       assists: report.assists || 0,
       week: state.week,
       moments: (report.moments || []).slice(0, 8),
+      competition: comp,
+      compName: report.compName || '',
     };
+    if (comp === 'kupa' || comp === 'avrupa') {
+      const bucket = comp === 'kupa' ? state.cup : state.europe;
+      if (bucket) {
+        if (result === 'win') {
+          bucket.round += 1;
+          if (bucket.round >= 4) {
+            bucket.alive = false;
+            state.trophies = state.trophies || [];
+            const cupName = comp === 'kupa' ? (state.cup.name || 'Kupa') : 'Kıta Kupası';
+            state.trophies.push({ name: cupName, season: state.season });
+            state.history.cups = (state.history.cups || 0) + 1;
+            addNews(state, cupName + ' senin!');
+          } else addNews(state, 'Kupa turunu geçtin.');
+        } else {
+          bucket.alive = false;
+          addNews(state, 'Kupaya veda.');
+        }
+        bucket.playedWeek = state.week;
+      }
+    }
+    if (comp === 'milli') {
+      state.milli = state.milli || { caps: 0, goals: 0 };
+      state.milli.caps += 1;
+      state.milli.goals += report.goals || 0;
+      state.milliInvite = null;
+      state.player.rel.taraftar = clamp(state.player.rel.taraftar + 4, 0, 100);
+      addNews(state, 'Milli formayla ' + (report.goals || 0) + ' gol.');
+    }
     state.live = null;
     state.restedThisWeek = false;
 
-    const lastWeek = state.week >= state.rounds.length;
-    if (lastWeek) {
+    if (!state.player.injured && state.player.energy < 18 && rngNext(state) < 0.34) {
+      state.player.injured = rngNext(state) < 0.22 ? 2 : 1;
+      addNews(state, 'Sakatlandın. ' + state.player.injured + ' hafta yoksun.');
+    }
+    const lastWeek = !comp && state.week >= state.rounds.length;
+    if (comp) {
+      state.phase = 'result';
+      state.afterResult = 'hub';
+    } else if (lastWeek) {
       finishSeason(state);
       state.phase = 'result';
       state.afterResult = 'season';

@@ -8,7 +8,7 @@
 
   let state = null;
   let view = 'menu';
-  let backTo = 'menu';
+  let backStack = ['menu'];
   let settings = loadSettings();
   let createPos = 'forvet';
   let draftName = '';
@@ -67,10 +67,14 @@
     },
     kick: function () { this.noise(0.07, 0.16); this.env(190, 0.08, 'triangle', 0.05, 0, 70); },
     goal: function () {
-      this.env(523, 0.11, 'triangle', 0.06, 0);
-      this.env(659, 0.12, 'triangle', 0.06, 0.08);
-      this.env(784, 0.18, 'triangle', 0.07, 0.15);
+      this.noise(0.18, 0.08);
+      this.env(392, 0.12, 'triangle', 0.05, 0);
+      this.env(523, 0.12, 'triangle', 0.07, 0.08);
+      this.env(659, 0.14, 'triangle', 0.07, 0.16);
+      this.env(784, 0.22, 'triangle', 0.08, 0.26);
+      this.env(1046, 0.18, 'sine', 0.04, 0.34);
     },
+    crowd: function () { this.noise(0.22, 0.1); this.env(180, 0.2, 'sawtooth', 0.02, 0, 90); },
     cheer: function () { this.goal(); this.env(988, 0.16, 'sine', 0.035, 0.26); },
     save: function () { this.noise(0.09, 0.1); this.env(150, 0.1, 'sine', 0.04, 0, 80); },
     miss: function () { this.env(210, 0.13, 'sine', 0.035, 0, 90); },
@@ -82,9 +86,9 @@
   function loadSettings() {
     try {
       const raw = localStorage.getItem(SET_KEY);
-      if (!raw) return { sound: true };
+      if (!raw) return { sound: true, vibrate: true };
       const parsed = JSON.parse(raw);
-      return { sound: !parsed || parsed.sound !== false };
+      return { sound: !parsed || parsed.sound !== false, vibrate: !parsed || parsed.vibrate !== false };
     } catch (e) {
       return { sound: true };
     }
@@ -102,7 +106,7 @@
       if (!data || data.v !== 1 || !data.player || !data.player.base || !data.clubId) return null;
       if (!L.clubById(data.clubId)) return null;
       if (!Array.isArray(data.rounds) || !data.rounds.length) return null;
-      return data;
+      return L.migrate ? L.migrate(data) : data;
     } catch (e) {
       return null;
     }
@@ -220,6 +224,7 @@
       '<button type="button" class="btn ghost" data-act="help">Nasıl oynanır?</button>' +
       '</div>' +
       '<button type="button" class="textbtn" data-act="sound">' + (settings.sound ? 'Ses açık' : 'Ses kapalı') + '</button>' +
+      '<button type="button" class="textbtn" data-act="vibrate">' + (settings.vibrate !== false ? 'Titreşim açık' : 'Titreşim kapalı') + '</button>' +
       '<p class="fine">Kurgusal kulüpler. Ağ gerekmez; kayıt bu cihazda kalır.</p>' +
       '<div class="pitch-footer" aria-hidden="true"></div></div>';
   }
@@ -349,8 +354,20 @@
       '<button type="button" class="btn" data-act="train-open">Antrenman</button>' +
       '<button type="button" class="btn" data-act="rest">Dinlen</button>' +
       '<button type="button" class="btn" data-act="drink">İçecek · ' + state.player.drinks + '</button>' +
-      '</div></div>' +
-      '<button type="button" class="btn gold big" data-act="match">Maça çık</button>' +
+      '</div>' +
+      '<div class="action-grid">' +
+      '<button type="button" class="btn ghost" data-act="life">Hayat</button>' +
+      '<button type="button" class="btn ghost" data-act="casino">Kumarhane</button>' +
+      '<button type="button" class="btn ghost" data-act="cabinet">Kupa dolabı</button>' +
+      (state.cup && state.cup.alive && state.cup.playedWeek !== state.week ? '<button type="button" class="btn ghost" data-act="cup">Kupa maçı</button>' : '') +
+      (state.europe && state.europe.alive && state.europe.playedWeek !== state.week ? '<button type="button" class="btn ghost" data-act="europe">Kıta kupası</button>' : '') +
+      (state.milliInvite ? '<button type="button" class="btn ghost" data-act="milli-open">Milli davet</button>' : '') +
+      '</div>' +
+      (state.player.injured ? '<p class="warn">Sakatlık: ' + state.player.injured + ' hafta. Dinlen veya maçı kaçır.</p>' : '') +
+      '</div>' +
+      (state.player.injured
+        ? '<button type="button" class="btn gold big" data-act="miss">Maçı kaçır</button>'
+        : '<button type="button" class="btn gold big" data-act="match">Maça çık</button>') +
       '<nav class="bottom-nav">' +
       '<button type="button" data-act="table">Lig</button>' +
       '<button type="button" data-act="profile">Profil</button>' +
@@ -509,6 +526,7 @@
           (agreed
             ? '<button type="button" class="btn tiny ghost" data-act="offer-no" data-id="' + esc(offer.id) + '">Vazgeç</button>'
             : '<div class="stack tight"><button type="button" class="btn tiny" data-act="offer-yes" data-id="' + esc(offer.id) + '">Kabul et</button>' +
+              '<button type="button" class="btn tiny ghost" data-act="pazarlik" data-id="' + esc(offer.id) + '">Pazarlık</button>' +
               '<button type="button" class="btn tiny ghost" data-act="offer-no" data-id="' + esc(offer.id) + '">Reddet</button></div>') +
           '</article>';
       }).join('');
@@ -524,6 +542,99 @@
       renderTable(review.table, review.clubId, review.tierBefore) +
       (review.retired ? '<p class="news">Bedenin artık profesyonel tempoya yetişmiyor. Kariyerin burada kapanıyor.</p>' : '<h3 class="section">Teklifler</h3>' + offers) +
       '<button type="button" class="btn gold" data-act="season-next">' + nextLabel + '</button></div>';
+  }
+
+  let talk = null;
+
+  function pagePazarlik() {
+    if (!talk) return '<div class="page">' + topbar('Pazarlık') + '<p>Açık teklif yok.</p></div>';
+    const club = L.clubById(talk.clubId);
+    return '<div class="page">' + topbar('Pazarlık') +
+      '<h2>' + esc(club ? club.name : 'Kulüp') + '</h2>' +
+      '<p class="helptext">İsteklerin yüksekse kulüp karşı teklif yapar ya da masadan kalkar.</p>' +
+      '<div class="card"><div class="rel-top"><span>Maaş</span><b>' + L.formatMoney(talk.wage) + '</b></div>' +
+      '<div class="action-grid"><button type="button" class="btn tiny" data-act="talk" data-key="wage" data-dir="-1">−</button>' +
+      '<button type="button" class="btn tiny" data-act="talk" data-key="wage" data-dir="1">+</button></div></div>' +
+      '<div class="card"><div class="rel-top"><span>İmza parası</span><b>' + L.formatMoney(talk.bonus || 0) + '</b></div>' +
+      '<div class="action-grid"><button type="button" class="btn tiny" data-act="talk" data-key="bonus" data-dir="-1">−</button>' +
+      '<button type="button" class="btn tiny" data-act="talk" data-key="bonus" data-dir="1">+</button></div></div>' +
+      '<div class="card"><div class="rel-top"><span>Süre</span><b>' + (talk.years || 2) + ' yıl</b></div>' +
+      '<div class="action-grid"><button type="button" class="btn tiny" data-act="talk" data-key="years" data-dir="-1">−</button>' +
+      '<button type="button" class="btn tiny" data-act="talk" data-key="years" data-dir="1">+</button></div></div>' +
+      '<div class="card"><div class="rel-top"><span>Gol bonusu</span><b>' + L.formatMoney(talk.goalBonus || 0) + '</b></div>' +
+      '<div class="action-grid"><button type="button" class="btn tiny" data-act="talk" data-key="goalBonus" data-dir="-1">−</button>' +
+      '<button type="button" class="btn tiny" data-act="talk" data-key="goalBonus" data-dir="1">+</button></div></div>' +
+      '<button type="button" class="btn gold" data-act="talk-send">Teklifi götür</button>' +
+      (talk.counter ? '<button type="button" class="btn" data-act="talk-take">Karşı teklifi kabul et</button>' : '') +
+      '</div>';
+  }
+
+  function pageCasino() {
+    return '<div class="page">' + topbar('Kumarhane') +
+      '<p class="helptext">Kasa ' + L.formatMoney(state.player.money) + '. Kumar eğlencedir, maaşın asıl kaynaktır.</p>' +
+      '<article class="card"><h3>Slot</h3><p>Üçlü aynı sembol öder.</p>' +
+      '<button type="button" class="btn" data-act="slot" data-bet="50">50₺ çevir</button></article>' +
+      '<article class="card"><h3>Rulet</h3><p>Kırmızı ya da siyah. Sıfır kasanın.</p>' +
+      '<div class="action-grid"><button type="button" class="btn" data-act="rulet" data-pick="kirmizi">Kırmızı 50₺</button>' +
+      '<button type="button" class="btn" data-act="rulet" data-pick="siyah">Siyah 50₺</button></div></article>' +
+      '<article class="card"><h3>Blackjack</h3><p>17’de dur. Krupiye de 17’de durur.</p>' +
+      '<button type="button" class="btn" data-act="bj" data-bet="50">50₺ el</button></article></div>';
+  }
+
+  function pageLife() {
+    L.migrate(state);
+    const love = state.player.partner;
+    const gifts = (L.GIFTS || []).map(function (g) {
+      return '<button type="button" class="btn" data-act="gift" data-id="' + g.id + '">' + esc(g.name) + ' · ' + L.formatMoney(g.price) + '</button>';
+    }).join('');
+    const sponsors = (L.SPONSORS || []).map(function (s) {
+      const on = state.player.sponsor && state.player.sponsor.id === s.id;
+      return '<article class="shop"><div><h3>' + esc(s.name) + '</h3><p>' + esc(s.blurb) + ' · ' + L.formatMoney(s.pay) + '/hf</p></div>' +
+        '<button type="button" class="btn tiny" data-act="sponsor" data-id="' + s.id + '"' + (on ? ' disabled' : '') + '>' + (on ? 'Aktif' : 'İmzala') + '</button></article>';
+    }).join('');
+    return '<div class="page">' + topbar('Hayat') +
+      '<div class="card"><div class="rel-top"><span>Moral</span><b>' + state.player.morale + '</b></div>' + bar(state.player.morale, 'mid') +
+      '<p class="fine">Sözleşme ' + (state.player.contractYears || 0) + ' yıl · gol bonusu ' + L.formatMoney(state.player.goalBonus || 0) + '</p></div>' +
+      '<h3 class="section">Sevgili</h3>' +
+      (love
+        ? '<div class="card"><div class="rel-top"><span>' + esc(love.name) + '</span><b>' + love.love + '</b></div>' + bar(love.love, 'good') + '</div>' +
+          '<button type="button" class="btn" data-act="date">Akşam çık · 180₺</button>' + gifts
+        : '<button type="button" class="btn gold" data-act="meet">Biriyle tanış · 120₺</button>') +
+      '<h3 class="section">Sponsorluk</h3>' + sponsors +
+      '<button type="button" class="btn ghost" data-act="renew">Kulüple sözleşme yenile</button>' +
+      (state.milliInvite ? '<button type="button" class="btn" data-act="milli-open">Milli davet var</button>' : '') +
+      '</div>';
+  }
+
+  function pageCabinet() {
+    L.migrate(state);
+    const cups = (state.trophies || []).map(function (t) {
+      return '<li><b>' + esc(t.name) + '</b><span>Sezon ' + t.season + '</span></li>';
+    }).join('');
+    const hist = (state.seasonHistory || []).map(function (h) {
+      const club = L.clubById(h.clubId);
+      return '<li><b>S' + h.season + ' ' + esc(club ? club.short : '') + '</b><span>' + h.rank + '. · ' + h.goals + ' gol</span></li>';
+    }).join('');
+    const m = state.milli || { caps: 0, goals: 0 };
+    return '<div class="page">' + topbar('Kupa dolabı') +
+      '<div class="statgrid"><div class="stat"><b>' + (state.trophies || []).length + '</b><span>Kupa</span></div>' +
+      '<div class="stat"><b>' + m.caps + '</b><span>Milli maç</span></div>' +
+      '<div class="stat"><b>' + state.history.goals + '</b><span>Kariyer golü</span></div>' +
+      '<div class="stat"><b>' + state.history.assists + '</b><span>Kariyer asisti</span></div></div>' +
+      '<h3 class="section">Kupalar</h3>' + (cups ? '<ul class="fixtures">' + cups + '</ul>' : '<p class="fine">Vitrin boş. Sezonu şampiyon bitir.</p>') +
+      '<h3 class="section">Sezonlar</h3>' + (hist ? '<ul class="fixtures">' + hist + '</ul>' : '<p class="fine">İlk sezonun sürüyor.</p>') +
+      '</div>';
+  }
+
+  function pageMilli() {
+    L.migrate(state);
+    const inv = state.milliInvite;
+    return '<div class="page">' + topbar('Milli takım') +
+      '<h2>' + (inv ? 'Davetlisin' : 'Şimdilik yok') + '</h2>' +
+      '<p class="helptext">' + (inv ? esc(inv.foe) + ' ile hazırlık maçı. Forma, taraftarı coşturur.' : 'Formun yükselince telefon gelir.') + '</p>' +
+      '<p class="fine">Milli maç ' + ((state.milli && state.milli.caps) || 0) + ' · gol ' + ((state.milli && state.milli.goals) || 0) + '</p>' +
+      (inv ? '<button type="button" class="btn gold" data-act="milli-play">Formayı giy</button><button type="button" class="btn ghost" data-act="milli-no">Bu seferlik hayır</button>' : '') +
+      '</div>';
   }
 
   function pageRetired() {
@@ -559,11 +670,16 @@
     if (name === 'season') return pageSeason();
     if (name === 'retired') return pageRetired();
     if (name === 'match') return pageMatch();
+    if (name === 'pazarlik') return pagePazarlik();
+    if (name === 'casino') return pageCasino();
+    if (name === 'life') return pageLife();
+    if (name === 'cabinet') return pageCabinet();
+    if (name === 'milli') return pageMilli();
     return pageMenu();
   }
 
   function go(next, back) {
-    if (back) backTo = back;
+    if (back) backStack.push(back);
     if (next !== 'match' && matchView) {
       matchView.destroy();
       matchView = null;
@@ -615,11 +731,16 @@
       onFinished: finishMatch,
       sfx: Sfx,
       speed: function () { return window.YESIL && window.YESIL.animSpeed ? window.YESIL.animSpeed : 1; },
+      vibrate: function () { return settings.vibrate !== false; },
     });
     matchView.start();
   }
 
   function finishMatch(stats) {
+    if (state.live) {
+      stats.competition = state.live.competition || null;
+      stats.compName = state.live.compName || '';
+    }
     const res = L.completeMatch(state, stats);
     if (!res || !res.ok) {
       toast(res && res.message ? res.message : 'Maç işlenemedi.');
@@ -628,6 +749,7 @@
       return;
     }
     save();
+    if (res.match && (res.match.goals > 0 || res.match.result === 'win')) Sfx.crowd();
     if (res.match && res.match.result === 'win') Sfx.cheer();
     else Sfx.whistle();
     go('result');
@@ -673,6 +795,13 @@
     if (!btn || btn.disabled) return;
     const act = btn.dataset.act;
     if (act !== 'match-next' && act !== 'tutorial-ok' && act !== 'sound') Sfx.ui();
+    if (act === 'vibrate') {
+      settings.vibrate = settings.vibrate === false;
+      saveSettings();
+      toast(settings.vibrate ? 'Titreşim açık' : 'Titreşim kapalı');
+      if (view !== 'match') go(view);
+      return;
+    }
     if (act === 'sound') {
       settings.sound = !settings.sound;
       saveSettings();
@@ -684,7 +813,7 @@
       } else go(view);
       return;
     }
-    if (act === 'back') { go(backTo || 'menu'); return; }
+    if (act === 'back') { go(backStack.pop() || 'menu'); return; }
     if (act === 'new') { confirmWipe = false; draftName = ''; go('create', 'menu'); return; }
     if (act === 'stats') { go('stats', view === 'menu' ? 'menu' : view); return; }
     if (act === 'help') { go('help', view); return; }
@@ -753,6 +882,123 @@
       const next = L.continueResult(state);
       save();
       go(next === 'season' ? 'season' : 'hub');
+      return;
+    }
+    if (act === 'life') { go('life', 'hub'); return; }
+    if (act === 'casino') { go('casino', 'hub'); return; }
+    if (act === 'cabinet') { go('cabinet', 'hub'); return; }
+    if (act === 'milli-open') { go('milli', 'hub'); return; }
+    if (act === 'cup' || act === 'europe' || act === 'milli-play') {
+      const kind = act === 'cup' ? 'kupa' : act === 'europe' ? 'avrupa' : 'milli';
+      const res = L.beginSpecial(state, kind);
+      if (!res.ok) { toast(res.message); return; }
+      save();
+      go('match');
+      return;
+    }
+    if (act === 'milli-no') {
+      state.milliInvite = null;
+      save();
+      toast('Daveti erteledin.');
+      go('hub');
+      return;
+    }
+    if (act === 'miss') {
+      const res = L.missMatch(state);
+      save();
+      toast(res.message || 'Maç geçti.');
+      go(state.phase === 'season' ? 'season' : state.phase === 'result' ? 'result' : 'hub');
+      return;
+    }
+    if (act === 'meet' || act === 'date' || act === 'gift' || act === 'sponsor' || act === 'renew') {
+      let res;
+      if (act === 'meet') res = L.meetPartner(state);
+      else if (act === 'date') res = L.dateNight(state);
+      else if (act === 'gift') res = L.giveGift(state, btn.dataset.id);
+      else if (act === 'sponsor') res = L.signSponsor(state, btn.dataset.id);
+      else {
+        talk = L.renewalOffer(state);
+        go('pazarlik', 'life');
+        return;
+      }
+      save();
+      toast(res.message);
+      go('life', 'hub');
+      return;
+    }
+    if (act === 'slot' || act === 'rulet' || act === 'bj') {
+      const bet = Number(btn.dataset.bet || 50);
+      const res = act === 'slot' ? L.slot(state, bet) : act === 'rulet' ? L.roulette(state, bet, btn.dataset.pick) : L.blackjack(state, bet, 17);
+      save();
+      toast(res.message);
+      go('casino', 'hub');
+      return;
+    }
+    if (act === 'pazarlik') {
+      const id = btn.dataset.id;
+      const found = (state.offers || []).concat(state.inboxOffer || []).find(function (o) { return o && o.id === id; });
+      if (!found) { toast('Teklif yok.'); return; }
+      talk = {
+        id: found.id, clubId: found.clubId, tier: found.tier, wage: found.wage,
+        bonus: found.bonus || 0, years: found.years || 2, goalBonus: found.goalBonus || 40, kind: found.kind,
+      };
+      go('pazarlik', view);
+      return;
+    }
+    if (act === 'talk') {
+      if (!talk) return;
+      const key = btn.dataset.key;
+      const dir = Number(btn.dataset.dir || 1);
+      if (key === 'wage') talk.wage = Math.max(200, talk.wage + dir * Math.max(20, Math.round(talk.wage * 0.05)));
+      if (key === 'bonus') talk.bonus = Math.max(0, (talk.bonus || 0) + dir * 200);
+      if (key === 'years') talk.years = L.clamp((talk.years || 2) + dir, 1, 5);
+      if (key === 'goalBonus') talk.goalBonus = Math.max(0, (talk.goalBonus || 0) + dir * 20);
+      go('pazarlik');
+      return;
+    }
+    if (act === 'talk-send' || act === 'talk-take') {
+      if (!talk) return;
+      let res = { result: 'kabul', offer: talk, message: 'Karşı teklif tamam.' };
+      if (act === 'talk-take' && talk.counter) {
+        res.offer = Object.assign({}, talk, talk.counter, { kind: talk.kind, id: talk.id, clubId: talk.clubId, tier: talk.tier });
+      } else {
+        res = L.negotiate(state, talk, talk);
+      }
+      if (res.result === 'kabul') {
+        const deal = res.offer;
+        if (talk.kind === 'yenileme') {
+          L.applyDeal(state, deal);
+          toast('Sözleşme yenilendi. ' + L.formatMoney(deal.wage) + ' / hafta.');
+        } else if (state.inboxOffer && state.inboxOffer.id === talk.id) {
+          L.applyDeal(state, deal);
+          state.inboxOffer = Object.assign({}, state.inboxOffer, deal);
+          L.resolveInbox(state, 'now');
+          toast('İmza tamam. Yeni takıma geçtin.');
+        } else {
+          L.applyDeal(state, deal);
+          state.agreedOffer = deal;
+          toast(res.message || 'Anlaştın. Sezon sonunda geçersin.');
+        }
+        talk = null;
+        save();
+        go(state.phase === 'hub' ? 'hub' : (state.phase === 'season' ? 'season' : 'hub'));
+        return;
+      }
+      if (res.result === 'karsi') {
+        talk = Object.assign({}, talk, res.offer, { counter: res.offer });
+        toast(res.message);
+        save();
+        go('pazarlik');
+        return;
+      }
+      toast(res.message || 'Kulüp kalktı.');
+      if (talk.kind !== 'yenileme') {
+        L.rejectSeasonOffer(state, talk.id);
+        if (state.inboxOffer && state.inboxOffer.id === talk.id) state.inboxOffer = null;
+      }
+      talk = null;
+      save();
+      go(state.phase === 'season' ? 'season' : 'hub');
       return;
     }
     if (act === 'offer-yes') {

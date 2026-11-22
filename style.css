@@ -479,6 +479,28 @@ input {
   font-size: 12px;
 }
 .filebtn { display: grid; place-items: center; text-align: center; }
+.bust { width: 140px; height: 160px; align-self: center; background: transparent; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 2px solid rgba(255,255,255,0.2);
+  background: #143722;
+  padding: 6px 8px;
+}
+.swatch.on { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 200, 87, 0.35); }
+.tutor-pitch { width: 100%; height: 220px; border-radius: 16px; touch-action: none; background: #128a3c; }
+.days { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.day {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(12, 40, 24, 0.7);
+}
+.day.on { border-color: var(--gold); }
+.day b { display: block; }
+.day span { color: var(--muted); font-size: 13px; }
 .card, .shop, .fixture, .attr, .save-chip {
   background:
     linear-gradient(180deg, rgba(255, 214, 140, 0.08), transparent 42%),

@@ -32,6 +32,19 @@
     4: 'Amatör Kademe',
   };
 
+  const COUNTRIES = {
+    tr: { name: 'Türkiye', nameEn: 'Turkey', tiers: { 1: { name: 'Yıldız Lig', nameEn: 'Star League' }, 2: { name: 'Anadolu Lig', nameEn: 'Anatolian League' }, 3: { name: 'Bölgesel Lig', nameEn: 'Regional League' }, 4: { name: 'Amatör Kademe', nameEn: 'Amateur Tier' } } },
+    en: { name: 'İngiltere', nameEn: 'England', tiers: { 1: { name: 'Ada Ligi', nameEn: 'Island League' }, 2: { name: 'Ada Alt', nameEn: 'Island Second' } } },
+    es: { name: 'İspanya', nameEn: 'Spain', tiers: { 1: { name: 'Meseta Ligi', nameEn: 'Meseta League' }, 2: { name: 'Meseta Alt', nameEn: 'Meseta Second' } } },
+    it: { name: 'İtalya', nameEn: 'Italy', tiers: { 1: { name: 'Çizme Ligi', nameEn: 'Boot League' }, 2: { name: 'Çizme Alt', nameEn: 'Boot Second' } } },
+    de: { name: 'Almanya', nameEn: 'Germany', tiers: { 1: { name: 'Ren Ligi', nameEn: 'Rhine League' }, 2: { name: 'Ren Alt', nameEn: 'Rhine Second' } } },
+    fr: { name: 'Fransa', nameEn: 'France', tiers: { 1: { name: 'Seine Ligi', nameEn: 'Seine League' }, 2: { name: 'Seine Alt', nameEn: 'Seine Second' } } },
+    nl: { name: 'Hollanda', nameEn: 'Netherlands', tiers: { 1: { name: 'Kanal Ligi', nameEn: 'Canal League' }, 2: { name: 'Kanal Alt', nameEn: 'Canal Second' } } },
+    pt: { name: 'Portekiz', nameEn: 'Portugal', tiers: { 1: { name: 'Tejo Ligi', nameEn: 'Tagus League' }, 2: { name: 'Tejo Alt', nameEn: 'Tagus Second' } } },
+  };
+
+  const COUNTRY_PAY = { tr: 1, en: 1.22, es: 1.18, it: 1.16, de: 1.2, fr: 1.14, nl: 1.08, pt: 1.06 };
+
   function club(row) {
     row.second = row.second || '#f8fafc';
     row.shape = row.shape || 'shield';
@@ -74,23 +87,20 @@
     club({ id: 'iskele', name: 'İzmir Beyaz', nameEn: 'Izmir White', short: 'İzm Beyaz', shortEn: 'Izm Wht', tier: 4, strength: 51, color: '#f8fafc', second: '#0e7490', shape: 'round', pattern: 'stripes', initials: 'İB' }),
   ];
 
-  const FOREIGN = [
-    club({ id: 'londra-kirmizi', name: 'Londra Kırmızı', nameEn: 'London Red', short: 'Lon Kırmızı', shortEn: 'Lon Red', tier: 1, strength: 89, color: '#b91c1c', second: '#f8fafc', shape: 'shield', pattern: 'band', initials: 'LK' }),
-    club({ id: 'londra-mavi', name: 'Londra Mavi', nameEn: 'London Blue', short: 'Lon Mavi', shortEn: 'Lon Blue', tier: 1, strength: 87, color: '#1e3a8a', second: '#f8fafc', shape: 'round', pattern: 'stripes', initials: 'LM' }),
-    club({ id: 'madrid-beyaz', name: 'Madrid Beyaz', nameEn: 'Madrid White', short: 'Mad Beyaz', shortEn: 'Mad Wht', tier: 1, strength: 90, color: '#f8fafc', second: '#1d4ed8', shape: 'shield', pattern: 'plain', initials: 'MB' }),
-    club({ id: 'madrid-mor', name: 'Madrid Mor', nameEn: 'Madrid Purple', short: 'Mad Mor', shortEn: 'Mad Pur', tier: 1, strength: 84, color: '#5b21b6', second: '#f8fafc', shape: 'lozenge', pattern: 'band', initials: 'MMP' }),
-    club({ id: 'milano-kirmizi', name: 'Milano Kırmızı', nameEn: 'Milan Red', short: 'Mil Kırmızı', shortEn: 'Mil Red', tier: 1, strength: 86, color: '#9f1239', second: '#111827', shape: 'shield', pattern: 'stripes', initials: 'MKR' }),
-    club({ id: 'milano-mavi', name: 'Milano Mavi', nameEn: 'Milan Blue', short: 'Mil Mavi', shortEn: 'Mil Blue', tier: 1, strength: 85, color: '#1e40af', second: '#111827', shape: 'round', pattern: 'stripes', initials: 'MMV' }),
-    club({ id: 'paris-mavi', name: 'Paris Mavi', nameEn: 'Paris Blue', short: 'Par Mavi', shortEn: 'Par Blue', tier: 1, strength: 88, color: '#1d4ed8', second: '#e11d48', shape: 'round', pattern: 'band', initials: 'PM' }),
-    club({ id: 'munih-kirmizi', name: 'Münih Kırmızı', nameEn: 'Munich Red', short: 'Mün Kırmızı', shortEn: 'Mun Red', tier: 1, strength: 89, color: '#dc2626', second: '#f8fafc', shape: 'shield', pattern: 'quarters', initials: 'MÜK' }),
-    club({ id: 'amsterdam-kirmizi', name: 'Amsterdam Kırmızı', nameEn: 'Amsterdam Red', short: 'Ams Kırmızı', shortEn: 'Ams Red', tier: 1, strength: 84, color: '#b91c1c', second: '#f8fafc', shape: 'shield', pattern: 'band', initials: 'AK' }),
-    club({ id: 'lizbon-yesil', name: 'Lizbon Yeşil', nameEn: 'Lisbon Green', short: 'Liz Yeşil', shortEn: 'Lis Grn', tier: 1, strength: 83, color: '#166534', second: '#f8fafc', shape: 'shield', pattern: 'chevron', initials: 'LY' }),
-    club({ id: 'roma-bordo', name: 'Roma Bordo', nameEn: 'Rome Maroon', short: 'Rom Bordo', shortEn: 'Rom Mar', tier: 1, strength: 82, color: '#7f1d1d', second: '#f59e0b', shape: 'round', pattern: 'band', initials: 'RB' }),
-    club({ id: 'barselona-mavi', name: 'Barselona Mavi', nameEn: 'Barcelona Blue', short: 'Bar Mavi', shortEn: 'Bar Blue', tier: 1, strength: 88, color: '#1d4ed8', second: '#dc2626', shape: 'shield', pattern: 'stripes', initials: 'BM' }),
-  ];
+  CLUBS.forEach(function (c) { if (!c.country) c.country = 'tr'; });
 
   const CLUB_MAP = Object.create(null);
   CLUBS.forEach(function (c) { CLUB_MAP[c.id] = c; });
+
+  function registerClubs(list) {
+    (list || []).forEach(function (row) {
+      const c = club(row);
+      if (!c.country) c.country = 'tr';
+      if (CLUB_MAP[c.id]) return;
+      CLUBS.push(c);
+      CLUB_MAP[c.id] = c;
+    });
+  }
 
   const BOOTS = [
     { id: 'plastik', name: 'Plastik krampon', price: 450, bonus: { teknik: 2 }, blurb: 'Mahalle sahasının emektarı. Teknik +2.' },
@@ -201,6 +211,42 @@
 
   function clubById(id) { return CLUB_MAP[id] || null; }
   function tierName(tier) { return TIERS[tier] || 'Lig'; }
+
+  function countryInfo(id) { return COUNTRIES[id] || COUNTRIES.tr; }
+
+  function leagueInfo(country, tier) {
+    const pack = COUNTRIES[country] || COUNTRIES.tr;
+    return (pack.tiers && pack.tiers[tier]) || { name: tierName(tier), nameEn: tierName(tier) };
+  }
+
+  function clubsIn(country, tier) {
+    return CLUBS.filter(function (c) { return c.country === country && c.tier === tier; });
+  }
+
+  function maxTier(country) {
+    let m = 1;
+    CLUBS.forEach(function (c) {
+      if (c.country === country && c.tier > m) m = c.tier;
+    });
+    return m;
+  }
+
+  function continentalClubs(state) {
+    const grouped = Object.create(null);
+    CLUBS.forEach(function (c) {
+      if (c.tier !== 1 || !c.country) return;
+      if (!grouped[c.country]) grouped[c.country] = [];
+      grouped[c.country].push(c);
+    });
+    const out = [];
+    Object.keys(grouped).forEach(function (country) {
+      grouped[country].sort(function (a, b) { return b.strength - a.strength; });
+      grouped[country].slice(0, 2).forEach(function (c) {
+        if (!state || c.id !== state.clubId) out.push(c);
+      });
+    });
+    return out;
+  }
 
   function shirtNumber(name) {
     let h = 7;
@@ -328,8 +374,10 @@
     return rounds;
   }
 
-  function clubsForTier(tier, userClubId) {
-    const presets = CLUBS.filter(function (c) { return c.tier === tier; }).map(function (c) { return c.id; });
+  function clubsForTier(tier, userClubId, country) {
+    const home = country || 'tr';
+    const presets = CLUBS.filter(function (c) { return c.country === home && c.tier === tier; }).map(function (c) { return c.id; });
+    if (!presets.length) return userClubId ? [userClubId] : [];
     if (presets.indexOf(userClubId) >= 0) return presets;
     const next = presets.slice();
     next[next.length - 1] = userClubId;
@@ -337,7 +385,7 @@
   }
 
   function setupSeason(state) {
-    const ids = clubsForTier(state.tier, state.clubId);
+    const ids = clubsForTier(state.tier, state.clubId, state.country || 'tr');
     state.leagueIds = ids;
     state.rounds = roundRobin(ids);
     state.table = ids.map(function (id) {
@@ -369,6 +417,7 @@
       week: 1,
       phase: 'hub',
       tier: tier,
+      country: 'tr',
       clubId: '',
       wage: 340,
       leagueIds: [],
@@ -416,7 +465,7 @@
     state.milliInvite = null;
     state.cup = { alive: true, round: 0, name: tier >= 3 ? 'İlçe Kupası' : tier === 2 ? 'Anadolu Kupası' : 'Ulusal Kupa', playedWeek: 0 };
     state.europe = tier === 1 ? { alive: true, round: 0, playedWeek: 0 } : null;
-    const pool = CLUBS.filter(function (c) { return c.tier === tier; });
+    const pool = clubsIn('tr', tier);
     const club = pool[Math.floor(rngNext(state) * pool.length)];
     state.clubId = club.id;
     const wageBase = { 1: 7500, 2: 2400, 3: 820, 4: 340 }[tier];
@@ -963,11 +1012,12 @@
     }
   }
 
-  function offerWage(state, tier, mult) {
+  function offerWage(state, tier, mult, country) {
     const base = { 1: 9000, 2: 2800, 3: 980, 4: 420 }[tier] || 400;
     const avg = average(state.seasonRatings.length ? state.seasonRatings : [6.4]);
     const life = lifestyleScore(state);
-    let w = base * mult * (0.86 + Math.max(0, avg - 5.5) * 0.16) * (1 + life / 220);
+    const pay = COUNTRY_PAY[country] || 1;
+    let w = base * mult * pay * (0.86 + Math.max(0, avg - 5.5) * 0.16) * (1 + life / 220);
     w = Math.round(w / 10) * 10;
     return Math.max(w, state.wage + 90);
   }
@@ -984,17 +1034,19 @@
         id: 'o' + state.season + '-' + offers.length + '-' + club.id,
         clubId: club.id,
         tier: club.tier,
-        wage: offerWage(state, club.tier, mult),
+        country: club.country || 'tr',
+        wage: offerWage(state, club.tier, mult, club.country),
         kind: kind,
         years: 3,
         bonus: Math.round(offerWage(state, club.tier, mult) * 2 / 10) * 10,
         goalBonus: club.tier === 1 ? 200 : club.tier === 2 ? 90 : 40,
       });
     }
-    const higher = CLUBS.filter(function (c) { return c.tier === tier - 1; })
+    const home = state.country || 'tr';
+    const higher = CLUBS.filter(function (c) { return c.country === home && c.tier === tier - 1; })
       .slice()
       .sort(function (a, b) { return b.strength - a.strength; });
-    const same = CLUBS.filter(function (c) { return c.tier === tier && c.id !== state.clubId; })
+    const same = CLUBS.filter(function (c) { return c.country === home && c.tier === tier && c.id !== state.clubId; })
       .slice()
       .sort(function (a, b) { return b.strength - a.strength; });
     const champ = state.review && state.review.champion;
@@ -1004,6 +1056,13 @@
       if (avg >= 7.8 || champ) pushClub(higher[0], 1.22, 'yildiz');
     }
     if (avg >= 6.3 && same.length) pushClub(same[0], 1.12, 'yatay');
+    const abroadOk = (home === 'tr' && tier <= 2 && (avg >= 7.15 || (champ && tier === 1))) || (home !== 'tr' && (avg >= 7.1 || champ));
+    if (abroadOk) {
+      const pool = CLUBS.filter(function (c) { return c.country && c.country !== home && c.tier === 1; })
+        .slice()
+        .sort(function (a, b) { return b.strength - a.strength; });
+      if (pool.length) pushClub(pool[Math.floor(rngNext(state) * Math.min(6, pool.length))], 1.28, 'yurt');
+    }
     return offers.slice(0, 3);
   }
 
@@ -1012,8 +1071,10 @@
     let rank = sorted.findIndex(function (r) { return r.id === state.clubId; }) + 1;
     if (rank <= 0) rank = sorted.length;
     const tierBefore = state.tier;
+    const size = (state.leagueIds && state.leagueIds.length) || 8;
+    const floor = maxTier(state.country || 'tr');
     const promoted = rank <= 2 && state.tier > 1;
-    const relegated = rank >= 7 && state.tier < 4;
+    const relegated = rank > size - 2 && state.tier < floor;
     const champion = rank === 1;
     let prize = 0;
     if (champion) {
@@ -1137,16 +1198,31 @@
     let targetTier = state.tier;
     if (state.tier > 1 && avg >= 7.35) targetTier = state.tier - 1;
     if (state.tier === 1) targetTier = 1;
-    const list = CLUBS.filter(function (c) { return c.tier === targetTier && c.id !== state.clubId; });
-    if (!list.length) return null;
-    const club = list[Math.floor(rngNext(state) * list.length)];
-    const offerWageNow = offerWage(state, club.tier, club.tier < state.tier ? 1.05 : 1.15);
+    const home = state.country || 'tr';
+    let club = null;
+    let kind = 'yatay';
+    if (opts.abroad || (home === 'tr' && state.tier === 1 && avg >= 7.55)) {
+      const foreign = CLUBS.filter(function (c) { return c.country && c.country !== home && c.tier === 1; });
+      if (foreign.length && (opts.abroad || rngNext(state) < 0.45)) {
+        club = foreign[Math.floor(rngNext(state) * foreign.length)];
+        kind = 'yurt';
+        targetTier = 1;
+      }
+    }
+    if (!club) {
+      const list = CLUBS.filter(function (c) { return c.country === home && c.tier === targetTier && c.id !== state.clubId; });
+      if (!list.length) return null;
+      club = list[Math.floor(rngNext(state) * list.length)];
+      kind = club.tier < state.tier ? 'yuksel' : 'yatay';
+    }
+    const offerWageNow = offerWage(state, club.tier, kind === 'yurt' ? 1.3 : club.tier < state.tier ? 1.05 : 1.15, club.country);
     const offer = {
       id: 'inbox-' + state.season + '-' + state.week + '-' + club.id,
       clubId: club.id,
       tier: club.tier,
+      country: club.country || home,
       wage: offerWageNow,
-      kind: club.tier < state.tier ? 'yuksel' : 'yatay',
+      kind: kind,
       years: 3,
       bonus: Math.round(offerWageNow * 2 / 10) * 10,
       goalBonus: club.tier === 1 ? 200 : 80,
@@ -1310,6 +1386,9 @@
   function applyClubMove(state, offer) {
     state.clubId = offer.clubId;
     state.tier = offer.tier;
+    const moved = clubById(offer.clubId);
+    if (moved && moved.country) state.country = moved.country;
+    else if (offer.country) state.country = offer.country;
     state.wage = offer.wage;
     state.player.rel.hoca = 46;
     state.player.rel.takim = 42;
@@ -1361,9 +1440,17 @@
     state.afterResult = null;
     state.live = null;
     state.player.energy = clamp(Math.max(state.player.energy, 80), 0, 100);
+    const home = state.country || 'tr';
+    if (home === 'tr') {
+      state.cup = { alive: true, round: 0, name: state.tier >= 3 ? 'İlçe Kupası' : state.tier === 2 ? 'Anadolu Kupası' : 'Ulusal Kupa', playedWeek: 0 };
+    } else {
+      state.cup = { alive: true, round: 0, name: 'Ulusal Kupa', playedWeek: 0 };
+    }
+    state.europe = state.tier === 1 ? { alive: true, round: 0, playedWeek: 0 } : null;
     setupSeason(state);
     noteClub(state);
-    addNews(state, 'Sezon ' + state.season + ' başlıyor. ' + tierName(state.tier) + '.');
+    const league = leagueInfo(home, state.tier);
+    addNews(state, 'Sezon ' + state.season + ' başlıyor. ' + league.name + '.');
     return { ok: true, message: 'Yeni sezon başladı.' };
   }
 
@@ -1416,7 +1503,28 @@
     ATTR_LABEL: ATTR_LABEL,
     TIERS: TIERS,
     CLUBS: CLUBS,
-    FOREIGN: FOREIGN,
+    FOREIGN: [],
+    COUNTRIES: COUNTRIES,
+    COUNTRY_PAY: COUNTRY_PAY,
+    registerClubs: registerClubs,
+    clubsIn: clubsIn,
+    maxTier: maxTier,
+    countryInfo: countryInfo,
+    leagueInfo: leagueInfo,
+    continentalClubs: continentalClubs,
+    setupSeason: setupSeason,
+    leagueNeedsRebuild: function (state) {
+      if (!state) return false;
+      const ids = clubsForTier(state.tier, state.clubId, state.country || 'tr');
+      if (!state.leagueIds || state.leagueIds.length !== ids.length) return true;
+      const set = Object.create(null);
+      ids.forEach(function (id) { set[id] = true; });
+      return state.leagueIds.some(function (id) {
+        if (!set[id]) return true;
+        const c = CLUB_MAP[id];
+        return !c || c.country !== (state.country || 'tr');
+      });
+    },
     BOOTS: BOOTS,
     LIFE: LIFE,
     OUTCOMES: OUTCOMES,

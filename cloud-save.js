@@ -188,6 +188,82 @@
     });
   }
 
+  function intField(n) { return { integerValue: String(Math.round(Number(n) || 0)) }; }
+  function strField(s) { return { stringValue: String(s == null ? '' : s) }; }
+
+  function publishBoard(record) {
+    const c = config();
+    if (!c) return Promise.reject(new Error('unconfigured'));
+    return ensureUser().then(function (session) {
+      const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(c.projectId) +
+        '/databases/(default)/documents/leaderboard/' + encodeURIComponent(session.localId) +
+        '?updateMask.fieldPaths=name&updateMask.fieldPaths=goals&updateMask.fieldPaths=assists&updateMask.fieldPaths=matches&updateMask.fieldPaths=club&updateMask.fieldPaths=country&updateMask.fieldPaths=updated&key=' +
+        encodeURIComponent(c.apiKey);
+      return fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.idToken },
+        body: JSON.stringify({
+          fields: {
+            name: strField(record.name),
+            goals: intField(record.goals),
+            assists: intField(record.assists),
+            matches: intField(record.matches),
+            club: strField(record.club),
+            country: strField(record.country),
+            updated: intField(Date.now()),
+          },
+        }),
+      }).then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error((data && data.error && data.error.message) || 'firestore');
+          return { ok: true };
+        });
+      });
+    });
+  }
+
+  function readNum(field) {
+    if (!field) return 0;
+    return Number(field.integerValue || field.doubleValue || 0);
+  }
+
+  function fetchBoard() {
+    const c = config();
+    if (!c) return Promise.reject(new Error('unconfigured'));
+    return ensureUser().then(function (session) {
+      const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(c.projectId) +
+        '/databases/(default)/documents:runQuery?key=' + encodeURIComponent(c.apiKey);
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.idToken },
+        body: JSON.stringify({
+          structuredQuery: {
+            from: [{ collectionId: 'leaderboard' }],
+            orderBy: [{ field: { fieldPath: 'goals' }, direction: 'DESCENDING' }],
+            limit: 10,
+          },
+        }),
+      }).then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error((data && data.error && data.error.message) || 'firestore');
+          const rows = [];
+          (Array.isArray(data) ? data : []).forEach(function (item) {
+            const fields = item.document && item.document.fields;
+            if (!fields) return;
+            rows.push({
+              name: fields.name && fields.name.stringValue,
+              goals: readNum(fields.goals),
+              assists: readNum(fields.assists),
+              club: fields.club && fields.club.stringValue,
+              country: fields.country && fields.country.stringValue,
+            });
+          });
+          return rows;
+        });
+      });
+    });
+  }
+
   function download(code, filename) {
     if (typeof document === 'undefined') return false;
     const blob = new Blob([code], { type: 'text/plain' });
@@ -222,6 +298,8 @@
     configured: configured,
     saveCloud: saveCloud,
     loadCloud: loadCloud,
+    publishBoard: publishBoard,
+    fetchBoard: fetchBoard,
     download: download,
     share: share,
     crc: crc,

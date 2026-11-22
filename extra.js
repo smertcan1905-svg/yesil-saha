@@ -40,6 +40,16 @@
     if (state.milliInvite === undefined) state.milliInvite = null;
     if (!state.cup) state.cup = { alive: true, round: 0, name: 'İlçe Kupası', playedWeek: 0 };
     if (state.europe === undefined) state.europe = state.tier === 1 ? { alive: true, round: 0, playedWeek: 0 } : null;
+    if (!state.country) {
+      const known = L.clubById(state.clubId);
+      state.country = known && known.country ? known.country : 'tr';
+    }
+    if (state.tier === 1 && state.country !== 'tr') {
+      const known = L.clubById(state.clubId);
+      if (!known || known.country === 'tr') state.country = 'tr';
+    }
+    const untouched = state.week === 1 && (!state.table || state.table.every(function (row) { return !row.p && !row.w && !row.d && !row.l; }));
+    if (untouched && L.leagueNeedsRebuild && L.leagueNeedsRebuild(state)) L.setupSeason(state);
     if (!state.history.cups) state.history.cups = state.history.cups || 0;
     if (!state.history.playerAwards) state.history.playerAwards = 0;
     return state;
@@ -389,8 +399,9 @@
     if (!live) return { ok: false, message: 'Maç kurulamadı.' };
     live.competition = kind;
     live.compName = kind === 'milli' ? 'Milli maç' : kind === 'avrupa' ? 'Kıta Kupası' : (state.cup && state.cup.name) || 'Kupa';
-    if (kind === 'avrupa' && L.FOREIGN && L.FOREIGN.length) {
-      const pick = L.FOREIGN[Math.abs((state.season * 5 + state.week) | 0) % L.FOREIGN.length];
+    const pool = L.continentalClubs ? L.continentalClubs(state) : (L.FOREIGN || []);
+    if (kind === 'avrupa' && pool.length) {
+      const pick = pool[Math.abs((state.season * 5 + state.week) | 0) % pool.length];
       live.displayOpp = pick.name;
       live.oppColor = pick.color;
       live.oppSecond = pick.second;
@@ -417,6 +428,13 @@
   }
   L.maybeMilli = maybeMilli;
 
+  const origTrain = L.train;
+  L.train = function (state, attr) {
+    const res = origTrain(state, attr);
+    if (res && res.ok && L.bumpMission) L.bumpMission(state, 'train');
+    return res;
+  };
+
   const origComplete = L.completeMatch;
   L.completeMatch = function (state, report) {
     migrate(state);
@@ -424,6 +442,11 @@
     if (res && res.ok) {
       if (state.player.partner) state.player.partner.love = L.clamp(state.player.partner.love - 1, 0, 100);
       if (!state.milliInvite) maybeMilli(state);
+      if (L.bumpMission) {
+        L.bumpMission(state, 'match');
+        if (report && report.goals) L.bumpMission(state, 'goal', report.goals);
+        if (state.lastMatch && state.lastMatch.result === 'win') L.bumpMission(state, 'win');
+      }
     }
     return res;
   };

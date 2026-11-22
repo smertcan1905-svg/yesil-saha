@@ -1,15 +1,20 @@
 /* Çevrimdışı önbellek. Ağ varsa taze dosya, yoksa kayıt. */
-const CACHE = 'yesil-saha-v4';
+const CACHE = 'yesil-saha-v7';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './logic.js',
+  './leagues.js',
   './extra.js',
+  './progress.js',
   './i18n.js',
   './crests.js',
   './firebase-config.js',
   './cloud-save.js',
+  './ads-config.js',
+  './ads.js',
+  './billing.js',
   './match.js',
   './game.js',
   './manifest.webmanifest',

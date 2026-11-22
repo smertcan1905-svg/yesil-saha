@@ -814,10 +814,44 @@
       ctx.arc(0, -16.2, 5.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = hair;
-      ctx.beginPath();
-      ctx.arc(0, -17.4, 5.6, Math.PI * 0.98, Math.PI * 2.02);
-      ctx.fill();
-      ctx.fillRect(-5.4, -17.6, 10.8, 3.2);
+      const style = o.hairStyle || 'short';
+      if (style === 'buzz') {
+        ctx.beginPath();
+        ctx.arc(0, -16.4, 5.1, Math.PI * 1.02, Math.PI * 1.98);
+        ctx.fill();
+      } else if (style === 'mohawk') {
+        ctx.fillRect(-1.7, -24, 3.4, 11);
+        ctx.beginPath();
+        ctx.arc(0, -16.2, 4.8, Math.PI * 1.15, Math.PI * 1.85);
+        ctx.fill();
+      } else if (style === 'long') {
+        ctx.beginPath();
+        ctx.arc(0, -17.2, 5.8, Math.PI, 0);
+        ctx.fill();
+        ctx.fillRect(-6.4, -16.5, 3.4, 11);
+        ctx.fillRect(3, -16.5, 3.4, 11);
+      } else if (style === 'curly') {
+        ctx.beginPath();
+        ctx.arc(0, -17.6, 5.4, Math.PI, 0);
+        ctx.arc(-4.4, -18.2, 2.3, 0, Math.PI * 2);
+        ctx.arc(0, -20.4, 2.3, 0, Math.PI * 2);
+        ctx.arc(4.4, -18.2, 2.3, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, -17.4, 5.6, Math.PI * 0.98, Math.PI * 2.02);
+        ctx.fill();
+        ctx.fillRect(-5.4, -17.6, 10.8, 3.2);
+      }
+      if (o.beard && o.beard !== 'none') {
+        ctx.save();
+        ctx.fillStyle = hair;
+        ctx.globalAlpha = o.beard === 'full' ? 0.95 : 0.45;
+        ctx.beginPath();
+        ctx.ellipse(0, -12.2, o.beard === 'full' ? 3.6 : 2.5, 1.7, 0, 0, Math.PI);
+        ctx.fill();
+        ctx.restore();
+      }
       ctx.restore();
     }
 
@@ -979,8 +1013,10 @@
         }, time);
         const meClub = L.clubById(state.clubId);
         const mine = meClub ? meClub.color : '#15803d';
+        const look = (state.player && state.player.look) || {};
         drawFigure(userPos.x, userPos.y, {
-          jersey: mine, second: meClub && meClub.second, shorts: '#f8fafc', socks: mine, hair: '#1c1917',
+          jersey: mine, second: meClub && meClub.second, shorts: '#f8fafc', socks: mine,
+          hair: look.hairColor || '#1c1917', hairStyle: look.hair, skin: look.skin, boot: look.boots, beard: look.beard,
           number: String(L.shirtNumber(state.player.name)),
           captain: L.isCaptain(state), phase: 0.2, running: running, kick: kickAnim,
           celebrate: celebrateT > 0.2,
@@ -1072,7 +1108,11 @@
           second: meClub && meClub.second,
           shorts: '#f8fafc',
           socks: meClub ? meClub.color : '#15803d',
-          hair: '#1c1917',
+          hair: (state.player.look && state.player.look.hairColor) || '#1c1917',
+          hairStyle: state.player.look && state.player.look.hair,
+          skin: state.player.look && state.player.look.skin,
+          boot: state.player.look && state.player.look.boots,
+          beard: state.player.look && state.player.look.beard,
           number: String(L.shirtNumber(state.player.name)),
           captain: L.isCaptain(state),
           celebrate: true,
@@ -1187,5 +1227,72 @@
     };
   }
 
-  root.YSMatch = { MatchView: MatchView };
+  function paintBust(canvas, look, kit) {
+    if (!canvas) return;
+    look = look || {};
+    kit = kit || '#15803d';
+    const ctx = canvas.getContext('2d');
+    const dpr = 2;
+    canvas.width = 140 * dpr;
+    canvas.height = 160 * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, 140, 160);
+    ctx.save();
+    ctx.translate(70, 96);
+    ctx.scale(2.1, 2.1);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(0, 22, 16, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = kit;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(-16, -6, 32, 26, 6) : ctx.rect(-16, -6, 32, 26);
+    ctx.fill();
+    ctx.fillStyle = look.skin || '#e0b08a';
+    ctx.fillRect(-3, -8, 6, 4);
+    ctx.beginPath();
+    ctx.arc(0, -16, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = look.hairColor || '#1c1917';
+    const style = look.hair || 'short';
+    if (style === 'buzz') {
+      ctx.beginPath();
+      ctx.arc(0, -17, 8.2, Math.PI, 0);
+      ctx.fill();
+    } else if (style === 'mohawk') {
+      ctx.fillRect(-2, -30, 4, 16);
+    } else if (style === 'long') {
+      ctx.beginPath();
+      ctx.arc(0, -17, 9, Math.PI, 0);
+      ctx.fill();
+      ctx.fillRect(-10, -16, 5, 18);
+      ctx.fillRect(5, -16, 5, 18);
+    } else if (style === 'curly') {
+      ctx.beginPath();
+      ctx.arc(-6, -20, 4, 0, Math.PI * 2);
+      ctx.arc(0, -24, 4, 0, Math.PI * 2);
+      ctx.arc(6, -20, 4, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, -18, 9, Math.PI, 0);
+      ctx.fill();
+      ctx.fillRect(-8, -18, 16, 5);
+    }
+    if (look.beard && look.beard !== 'none') {
+      ctx.globalAlpha = look.beard === 'full' ? 0.95 : 0.4;
+      ctx.beginPath();
+      ctx.ellipse(0, -10, look.beard === 'full' ? 5 : 3.5, 2.4, 0, 0, Math.PI);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = look.boots || '#111827';
+    ctx.beginPath();
+    ctx.ellipse(-6, 22, 5, 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(6, 22, 5, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  root.YSMatch = { MatchView: MatchView, paintBust: paintBust };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -389,7 +389,18 @@
     if (!live) return { ok: false, message: 'Maç kurulamadı.' };
     live.competition = kind;
     live.compName = kind === 'milli' ? 'Milli maç' : kind === 'avrupa' ? 'Kıta Kupası' : (state.cup && state.cup.name) || 'Kupa';
-    live.displayOpp = kind === 'milli' ? 'Kıyı Milli' : kind === 'avrupa' ? 'Kıta Rakibi' : 'Kupa Rakibi';
+    if (kind === 'avrupa' && L.FOREIGN && L.FOREIGN.length) {
+      const pick = L.FOREIGN[Math.abs((state.season * 5 + state.week) | 0) % L.FOREIGN.length];
+      live.displayOpp = pick.name;
+      live.oppColor = pick.color;
+      live.oppSecond = pick.second;
+    } else if (kind === 'milli') {
+      live.displayOpp = 'Kıyı Milli';
+      live.oppColor = '#b91c1c';
+    } else {
+      live.displayOpp = 'Kupa Rakibi';
+      live.oppColor = '#1d4ed8';
+    }
     return { ok: true, message: live.compName + ' başlıyor.' };
   }
   L.beginSpecial = beginSpecial;

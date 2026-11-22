@@ -170,8 +170,9 @@ h2 { font-size: 22px; }
   padding: 12px 14px;
   box-shadow: var(--shadow);
 }
-.save-chip { display: flex; flex-direction: column; gap: 2px; }
-.save-chip strong { font-size: 18px; }
+.save-chip { display: flex; flex-direction: row; align-items: center; gap: 12px; }
+.save-chip strong { font-size: 18px; display: block; }
+.save-chip span { display: block; color: var(--muted); }
 .card p, .shop p, .fixture p { margin: 4px 0 0; color: var(--muted); }
 .fixture h2 { font-size: 26px; }
 .idcard { display: flex; gap: 12px; align-items: center; }
@@ -277,7 +278,7 @@ input {
 .tr.up .tname { color: var(--mint); }
 .tr.down .tname { color: #ffb4a8; }
 .tr span { text-align: center; }
-.tr .tname { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr .tname { text-align: left; display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
 .pts { color: var(--gold); }
 .fixtures, .history, .moments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .fixtures li, .moments li {
@@ -444,5 +445,46 @@ input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn:active, .toast { transition: none; }
+  .btn:active, .toast, .page, .match { transition: none; animation: none; }
 }
+
+.page, .match { animation: rise 0.24s ease; }
+@keyframes rise {
+  from { opacity: 0.35; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.crest-wrap { display: inline-flex; line-height: 0; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35)); flex: none; }
+.crest-svg { width: 48px; height: 48px; }
+.tr .crest-svg, .fixtures .crest-svg { width: 22px; height: 22px; }
+.club-row, .idcard, .save-chip { align-items: center; }
+.fixture {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: center;
+}
+.fixture .crest-wrap { grid-row: 1 / span 3; }
+.fixture .eyebrow, .fixture h2, .fixture p { margin: 0; }
+.shop.offer { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.shop.offer .stack, .shop.offer > .btn { margin-left: auto; }
+.save-code {
+  width: 100%;
+  min-height: 108px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(4, 16, 10, 0.72);
+  padding: 10px 12px;
+  resize: vertical;
+  line-height: 1.35;
+  font-size: 12px;
+}
+.filebtn { display: grid; place-items: center; text-align: center; }
+.card, .shop, .fixture, .attr, .save-chip {
+  background:
+    linear-gradient(180deg, rgba(255, 214, 140, 0.08), transparent 42%),
+    var(--card);
+}
+.btn, .bottom-nav button, .iconbtn, .seg button {
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+.btn:active, .bottom-nav button:active { transform: translateY(1px) scale(0.99); }

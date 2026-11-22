@@ -29,6 +29,23 @@
     let diveDir = 1;
     let ballSpin = 0;
     let headerPhase = 0;
+    let celebrateT = 0;
+
+    function tx(key, fallback, vars) {
+      const I = root.YSI18n;
+      if (I && I.has && I.has(key)) return I.t(key, vars);
+      return fallback;
+    }
+    function tr(text) {
+      const I = root.YSI18n;
+      return I && I.say ? I.say(text) : (text || '');
+    }
+    function labelClub(club, short) {
+      const I = root.YSI18n;
+      if (!club) return '';
+      if (!I) return short ? club.short : club.name;
+      return short ? I.clubShort(club) : I.clubName(club);
+    }
     const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
     function speed() {
@@ -47,7 +64,7 @@
 
     function hint(text) {
       const el = document.getElementById('match-hint');
-      if (el) el.textContent = text || '';
+      if (el) el.textContent = tr(text || '');
     }
 
     function setNext(on, label) {
@@ -64,8 +81,8 @@
       const me = L.clubById(state.clubId);
       const opp = L.clubById(live.oppId);
       const score = document.getElementById('match-score');
-      const left = live.compName ? live.compName : (me ? me.short : 'Sen');
-      const right = live.displayOpp || (opp ? opp.short : 'Rakip');
+      const left = live.compName ? tr(live.compName) : (me ? labelClub(me, true) : tr('Sen'));
+      const right = live.displayOpp ? tr(live.displayOpp) : (opp ? labelClub(opp, true) : tr('Rakip'));
       if (score) {
         score.textContent = left + '  ' + L.teamGoals(live.stats) + ' – ' + live.stats.oppGoals + '  ' + right;
       }
@@ -77,10 +94,10 @@
       if (ev && ev.type === 'chance') {
         const chances = live.events.filter(function (e) { return e.type === 'chance'; });
         const idx = chances.indexOf(ev);
-        const labels = { sut: 'Şut', pas: 'Pas', frikik: 'Frikik', calim: 'Çalım', orta: 'Orta', kafa: 'Kafa', penalti: 'Penaltı', savunma: 'Top kapma' };
-        sub.textContent = 'Pozisyon ' + (idx + 1) + '/' + chances.length + ' · ' + (labels[ev.scene.type] || 'Şut');
-      } else if (ev && ev.type === 'opp') sub.textContent = 'Karşı atak';
-      else if (ev && ev.type === 'solo') sub.textContent = 'Takım atağı';
+        const kind = tx('kind.' + ev.scene.type, 'Şut');
+        sub.textContent = tx('match.pos', 'Pozisyon', { i: idx + 1, n: chances.length, k: kind });
+      } else if (ev && ev.type === 'opp') sub.textContent = tx('match.counter', 'Karşı atak');
+      else if (ev && ev.type === 'solo') sub.textContent = tx('match.teamAtk', 'Takım atağı');
     }
 
     function chanceHint(scene) {
@@ -119,7 +136,7 @@
       const live = state.live;
       const last = live && live.cursor >= live.events.length - 1;
       hint(waiting.detail || waiting.text || '');
-      setNext(true, last ? 'Maç sonu' : 'Devam');
+      setNext(true, last ? tx('match.end', 'Maç sonu') : tx('match.next', 'Devam'));
       updateHud();
     }
 
@@ -301,7 +318,9 @@
       if (good) {
         shake = 1;
         flash = 0.55;
+        if (pending.outcome === 'goal') celebrateT = 1.7;
         burst(ball.x, ball.y);
+        if (pending.outcome === 'goal') burst(180, 430);
         sfx('goal');
         buzz(pending.outcome === 'goal' ? [18, 30, 18] : 12);
       } else if (pending.outcome === 'save' || pending.outcome === 'weak' || pending.outcome === 'wall') sfx('save');
@@ -492,6 +511,7 @@
     function update(dt) {
       shake = Math.max(0, shake - dt * 1.8);
       flash = Math.max(0, flash - dt * 1.4);
+      celebrateT = Math.max(0, celebrateT - dt);
       ballSpin += dt * (phase === 'fly' ? 9 : 1.4);
       if (phase === 'aim') headerPhase += dt * 3.1;
       const shooting = phase === 'fly' && pending && pending.kind !== 'pass';
@@ -567,10 +587,18 @@
         g.fillStyle = i % 2 ? 'rgba(255,255,255,0.075)' : 'rgba(0,0,0,0.07)';
         g.fillRect(0, stripeTop + stripeH * i, w, stripeH + 0.6);
       }
-      g.fillStyle = '#071a10';
-      g.fillRect(0, 0, w, 10);
-      g.fillStyle = '#102818';
-      g.fillRect(0, 10, w, 28);
+      g.fillStyle = '#07140f';
+      g.fillRect(0, 0, w, 46);
+      const stand = g.createLinearGradient(0, 0, 0, 46);
+      stand.addColorStop(0, '#1a120c');
+      stand.addColorStop(1, '#3a2414');
+      g.fillStyle = stand;
+      g.fillRect(0, 8, w, 32);
+      g.fillStyle = 'rgba(255, 214, 140, 0.18)';
+      g.beginPath();
+      g.ellipse(90, 6, 70, 18, 0, 0, Math.PI * 2);
+      g.ellipse(270, 6, 70, 18, 0, 0, Math.PI * 2);
+      g.fill();
       const crowd = ['#f4f1e4', '#f59e0b', '#38bdf8', '#fb7185', '#a3e635', '#e7e5e4', '#c4b5fd'];
       const hairs = ['#1c1917', '#78350f', '#44403c', '#0f172a'];
       for (let row = 0; row < 2; row++) {
@@ -744,16 +772,29 @@
         }
         ctx.restore();
       }
-      arm(-1, stride * 0.35);
-      arm(1, -stride * 0.35 - kick * 0.7);
+      if (o.celebrate) {
+        arm(-1, -1.85);
+        arm(1, 1.85);
+      } else {
+        arm(-1, stride * 0.35);
+        arm(1, -stride * 0.35 - kick * 0.7);
+      }
       ctx.fillStyle = jersey;
-      roundRect(-8.6, -11, 17.2, 13.5, 4);
+      roundRect(-9.2, -12, 18.4, 14.2, 4.5);
       ctx.fill();
       ctx.strokeStyle = 'rgba(0,0,0,0.28)';
       ctx.lineWidth = 1;
       ctx.stroke();
+      if (o.second) {
+        ctx.fillStyle = o.second;
+        ctx.fillRect(-1.5, -11.4, 3, 12.4);
+      }
+      ctx.fillStyle = mixHex(jersey, 0.22);
+      ctx.globalAlpha = 0.35;
+      ctx.fillRect(-8.4, -11.2, 4, 12);
+      ctx.globalAlpha = 1;
       ctx.fillStyle = mixHex(jersey, -0.28);
-      ctx.fillRect(-3.2, -11, 6.4, 2.6);
+      ctx.fillRect(-4, -12, 8, 2.8);
       if (o.captain) {
         ctx.fillStyle = '#ffd56a';
         ctx.fillRect(-10.2, -5.5, 3.6, 2.4);
@@ -887,7 +928,7 @@
       ctx.textBaseline = 'middle';
       const size = text && text.length > 12 ? 26 : 34;
       ctx.font = '800 ' + size + 'px Segoe UI, sans-serif';
-      ctx.fillText(text || '', 180, 276);
+      ctx.fillText(tr(text || ''), 180, 276);
       ctx.restore();
     }
 
@@ -901,9 +942,11 @@
       const scene = ev && ev.type === 'chance' ? ev.scene : null;
       const running = phase === 'fly';
       if (scene) {
+        const foe = (state.live && state.live.oppColor) || '#b91c1c';
+        const foe2 = (state.live && state.live.oppSecond) || '#f8fafc';
         (scene.defenders || []).forEach(function (d, i) {
           drawFigure(d.x, d.y, {
-            jersey: '#b91c1c', shorts: '#f8fafc', socks: '#f8fafc', hair: '#1c1917',
+            jersey: foe, second: foe2, shorts: '#f8fafc', socks: foe, hair: '#1c1917',
             number: String(4 + (i % 3)), phase: i * 1.7, running: running,
           }, time);
         });
@@ -937,14 +980,15 @@
         const meClub = L.clubById(state.clubId);
         const mine = meClub ? meClub.color : '#15803d';
         drawFigure(userPos.x, userPos.y, {
-          jersey: mine, shorts: '#f8fafc', socks: '#f8fafc', hair: '#1c1917',
+          jersey: mine, second: meClub && meClub.second, shorts: '#f8fafc', socks: mine, hair: '#1c1917',
           number: String(L.shirtNumber(state.player.name)),
           captain: L.isCaptain(state), phase: 0.2, running: running, kick: kickAnim,
+          celebrate: celebrateT > 0.2,
         }, time);
         ctx.fillStyle = '#f8fafc';
         ctx.font = '700 10px Segoe UI, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('SEN', userPos.x, userPos.y + 24);
+        ctx.fillText(tx('match.you', 'SEN'), userPos.x, userPos.y + 26);
         if (phase === 'aim' && scene.type === 'kafa') {
           const t = (Math.sin(headerPhase) + 1) / 2;
           ctx.save();
@@ -1016,6 +1060,26 @@
       if (flash > 0) {
         ctx.fillStyle = 'rgba(255, 213, 106, ' + (flash * 0.25) + ')';
         ctx.fillRect(0, 0, L.LOG_W, L.LOG_H);
+      }
+      if (celebrateT > 0 && phase === 'banner') {
+        const meClub = L.clubById(state.clubId);
+        const slide = Math.min(1, (1.7 - celebrateT) / 0.45);
+        ctx.save();
+        ctx.translate(48 + slide * 150, 468 - Math.sin(slide * Math.PI) * 18);
+        ctx.scale(1.55, 1.55);
+        drawFigure(0, 0, {
+          jersey: meClub ? meClub.color : '#15803d',
+          second: meClub && meClub.second,
+          shorts: '#f8fafc',
+          socks: meClub ? meClub.color : '#15803d',
+          hair: '#1c1917',
+          number: String(L.shirtNumber(state.player.name)),
+          captain: L.isCaptain(state),
+          celebrate: true,
+          running: slide < 0.85,
+          phase: slide * 4,
+        }, time);
+        ctx.restore();
       }
       if (phase === 'banner' && state.live && state.live.waiting) drawBanner(state.live.waiting.text);
       ctx.restore();
@@ -1112,6 +1176,15 @@
       };
     };
     Object.defineProperty(this, 'phase', { get: function () { return phase; } });
+    this.forceCelebrate = function () {
+      celebrateT = 1.65;
+      phase = 'banner';
+      if (state.live && !state.live.waiting) {
+        state.live.waiting = { text: 'GOL!', detail: 'Ağlar sallanıyor!', outcome: 'goal' };
+      }
+      burst(160, 420);
+      burst(210, 390);
+    };
   }
 
   root.YSMatch = { MatchView: MatchView };

@@ -71,22 +71,24 @@
       g.connect(ctx.destination);
       src.start();
     },
-    kick: function () { this.noise(0.07, 0.16); this.env(190, 0.08, 'triangle', 0.05, 0, 70); },
-    goal: function () {
-      this.noise(0.18, 0.08);
-      this.env(392, 0.12, 'triangle', 0.05, 0);
-      this.env(523, 0.12, 'triangle', 0.07, 0.08);
-      this.env(659, 0.14, 'triangle', 0.07, 0.16);
-      this.env(784, 0.22, 'triangle', 0.08, 0.26);
-      this.env(1046, 0.18, 'sine', 0.04, 0.34);
+    file: function (name) {
+      const audio = window.YSAudio;
+      if (!audio || !settings.sound) return false;
+      audio.configure(settings);
+      if (audio[name]) { audio[name](); return true; }
+      return false;
     },
-    crowd: function () { this.noise(0.22, 0.1); this.env(180, 0.2, 'sawtooth', 0.02, 0, 90); },
-    cheer: function () { this.goal(); this.env(988, 0.16, 'sine', 0.035, 0.26); },
-    save: function () { this.noise(0.09, 0.1); this.env(150, 0.1, 'sine', 0.04, 0, 80); },
+    kick: function () { if (!this.file('kick')) { this.noise(0.07, 0.16); this.env(190, 0.08, 'triangle', 0.05, 0, 70); } },
+    goal: function () { if (!this.file('goal')) { this.noise(0.18, 0.08); this.env(523, 0.18, 'triangle', 0.07, 0); } },
+    crowd: function () { if (!this.file('attack')) this.noise(0.22, 0.1); },
+    cheer: function () { this.goal(); this.file('jingle'); },
+    save: function () { this.noise(0.09, 0.1); },
     miss: function () { this.env(210, 0.13, 'sine', 0.035, 0, 90); },
-    pass: function () { this.env(680, 0.05, 'sine', 0.035, 0); this.env(880, 0.06, 'sine', 0.028, 0.045); },
-    whistle: function () { this.env(1320, 0.16, 'sine', 0.03, 0); this.env(1560, 0.1, 'sine', 0.02, 0.1); },
-    ui: function () { this.env(720, 0.045, 'sine', 0.028, 0); },
+    pass: function () { this.file('kick'); },
+    whistle: function () { if (!this.file('whistle')) this.env(1320, 0.16, 'sine', 0.03, 0); },
+    ui: function () { if (!this.file('ui')) this.env(720, 0.045, 'sine', 0.028, 0); },
+    attack: function () { this.file('attack'); },
+    jingle: function () { this.file('jingle'); },
   };
 
   function t(key, vars) { return I18N ? I18N.t(key, vars) : key; }
@@ -119,15 +121,19 @@
   function loadSettings() {
     try {
       const raw = localStorage.getItem(SET_KEY);
-      if (!raw) return { sound: true, vibrate: true, lang: 'tr' };
+      if (!raw) return { sound: true, vibrate: true, lang: 'tr', music: 0.7, sfx: 0.85, notify: true, notifyAsked: false };
       const parsed = JSON.parse(raw);
       return {
         sound: !parsed || parsed.sound !== false,
         vibrate: !parsed || parsed.vibrate !== false,
         lang: parsed && parsed.lang === 'en' ? 'en' : 'tr',
+        music: parsed && typeof parsed.music === 'number' ? parsed.music : 0.7,
+        sfx: parsed && typeof parsed.sfx === 'number' ? parsed.sfx : 0.85,
+        notify: !parsed || parsed.notify !== false,
+        notifyAsked: !!(parsed && parsed.notifyAsked),
       };
     } catch (e) {
-      return { sound: true, vibrate: true, lang: 'tr' };
+      return { sound: true, vibrate: true, lang: 'tr', music: 0.7, sfx: 0.85, notify: true, notifyAsked: false };
     }
   }
 
@@ -143,16 +149,39 @@
       if (!data || data.v !== 1 || !data.player || !data.player.base || !data.clubId) return null;
       if (!L.clubById(data.clubId)) return null;
       if (!Array.isArray(data.rounds) || !data.rounds.length) return null;
-      return L.migrate ? L.migrate(data) : data;
+      const loaded = L.migrate ? L.migrate(data) : data;
+      touchEnergy(loaded);
+      lastEnergy = loaded.player.energy;
+      return loaded;
     } catch (e) {
       return null;
     }
   }
 
+  let lastEnergy = null;
+
+  function touchEnergy(target) {
+    if (!target || !target.player) return;
+    const now = Date.now();
+    const step = 4 * 60 * 1000;
+    const at = target.player.energyAt || now;
+    const gain = Math.floor((now - at) / step);
+    if (gain > 0) {
+      target.player.energy = Math.min(100, (target.player.energy || 0) + gain);
+      target.player.energyAt = at + gain * step;
+    } else if (!target.player.energyAt) {
+      target.player.energyAt = now;
+    }
+  }
+
   function save() {
     if (!state) return;
+    touchEnergy(state);
+    if (lastEnergy != null && state.player.energy < lastEnergy) state.player.energyAt = Date.now();
+    lastEnergy = state.player.energy;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }
     catch (e) { toast('Kayıt yazılamadı. Depolama dolu olabilir.'); }
+    if (window.YSNotify) window.YSNotify.sync(state, settings);
   }
 
   function esc(value) {
@@ -271,10 +300,9 @@
     }
     return '<div class="page menu-page">' +
       '<div class="hero">' +
-      '<svg class="logo-ball" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="36" fill="#f6f3ea" stroke="#102018" stroke-width="3"/>' +
-      '<path fill="#102018" d="M40 26l13.3 9.7-5.1 15.6H31.8l-5.1-15.6z"/></svg>' +
-      '<p class="eyebrow">' + esc(t('menu.kicker')) + '</p>' +
-      '<h1 class="logo">Yeşil Saha</h1>' +
+      '<img class="logo-img" src="logo.png" alt="Legend Striker">' +
+      '<p class="eyebrow">' + esc(t('app.subtitle')) + '</p>' +
+      '<h1 class="logo">Legend Striker</h1>' +
       '<p class="lede">' + esc(t('menu.lede')) + '</p>' +
       '</div>' + chip +
       '<div class="stack">' +
@@ -762,7 +790,12 @@
       '</div>' +
       '<h3 class="section">' + esc(t('set.feel')) + '</h3>' +
       '<button type="button" class="btn" data-act="sound">' + esc(settings.sound ? t('menu.soundOn') : t('menu.soundOff')) + '</button>' +
+      '<label class="field" for="vol-music">' + esc(t('set.music')) + '</label>' +
+      '<input id="vol-music" type="range" min="0" max="100" value="' + Math.round((settings.music == null ? 0.7 : settings.music) * 100) + '">' +
+      '<label class="field" for="vol-sfx">' + esc(t('set.sfx')) + '</label>' +
+      '<input id="vol-sfx" type="range" min="0" max="100" value="' + Math.round((settings.sfx == null ? 0.85 : settings.sfx) * 100) + '">' +
       '<button type="button" class="btn ghost" data-act="vibrate">' + esc(settings.vibrate !== false ? t('menu.vibOn') : t('menu.vibOff')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="notify">' + esc(settings.notify !== false ? t('set.notifyOn') : t('set.notifyOff')) + '</button>' +
       '<button type="button" class="btn" data-act="tutorial-open">' + esc(t('tutor.replay')) + '</button>' +
       '<h3 class="section">' + esc(t('ads.title')) + '</h3>' +
       (window.YSAds && window.YSAds.removed()
@@ -957,6 +990,12 @@
     view = next;
     const root = document.getElementById('screen');
     root.className = 'screen screen-' + view;
+    if (window.YSAudio) {
+      window.YSAudio.configure(settings);
+      if (next === 'match') window.YSAudio.match();
+      else window.YSAudio.menu();
+      if (next === 'season' && state && state.review && state.review.champion) window.YSAudio.jingle();
+    }
     if (next === 'match') {
       showMatch();
       return;
@@ -1138,6 +1177,7 @@
       if (tutorStep >= steps.length) {
         if (state) { state.sawTutorial = true; save(); }
         toast(t('tutor.done'));
+        askNotes();
         go(state ? 'hub' : 'menu');
         return;
       }
@@ -1223,7 +1263,7 @@
     ctx.fillRect(0, 0, 720, 180);
     ctx.fillStyle = '#ffd56a';
     ctx.font = '700 42px Segoe UI, sans-serif';
-    ctx.fillText('Yeşil Saha', 48, 110);
+    ctx.fillText('Legend Striker', 48, 110);
     ctx.fillStyle = '#f6f3ea';
     ctx.font = '700 36px Segoe UI, sans-serif';
     text.split('\n').forEach(function (line, i) {
@@ -1233,11 +1273,11 @@
     canvas.toBlob(function (blob) {
       const file = blob && typeof File !== 'undefined' ? new File([blob], 'rekor.png', { type: 'image/png' }) : null;
       if (navigator.share && file && navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({ title: 'Yeşil Saha', text: text, files: [file] }).then(function () { finish(true); }).catch(function () { finish(false); });
+        navigator.share({ title: 'Legend Striker', text: text, files: [file] }).then(function () { finish(true); }).catch(function () { finish(false); });
         return;
       }
       if (navigator.share) {
-        navigator.share({ title: 'Yeşil Saha', text: text }).then(function () { finish(true); }).catch(function () {
+        navigator.share({ title: 'Legend Striker', text: text }).then(function () { finish(true); }).catch(function () {
           if (Cloud) Cloud.share(text).catch(function () {});
           finish(false);
         });
@@ -1438,8 +1478,27 @@
       if (tutorTimer) { cancelAnimationFrame(tutorTimer); tutorTimer = 0; }
       const tutor = document.getElementById('tutorial');
       if (tutor) tutor.remove();
+      askNotes();
       if (view === 'ogretici') go(state ? 'hub' : 'menu');
       else if (view !== 'match') go(view);
+      return;
+    }
+    if (act === 'notify') {
+      settings.notify = settings.notify === false;
+      settings.notifyAsked = true;
+      saveSettings();
+      if (settings.notify && window.YSNotify) {
+        window.YSNotify.ask().then(function (ok) {
+          settings.notify = !!ok;
+          saveSettings();
+          if (window.YSNotify) window.YSNotify.sync(state, settings);
+          if (view === 'settings') go('settings');
+        });
+      } else if (window.YSNotify) {
+        window.YSNotify.sync(state, settings);
+      }
+      toast(settings.notify ? t('set.notifyOn') : t('set.notifyOff'));
+      if (view === 'settings') go('settings');
       return;
     }
     if (act === 'tutorial-open') {
@@ -1697,8 +1756,26 @@
     }
   }
 
+  function askNotes() {
+    if (!window.YSNotify || !window.YSNotify.isNative() || settings.notifyAsked || settings.notify === false) return;
+    settings.notifyAsked = true;
+    saveSettings();
+    window.YSNotify.ask().then(function (ok) {
+      settings.notify = !!ok;
+      saveSettings();
+      window.YSNotify.sync(state, settings);
+    });
+  }
+
   function onInput(event) {
     if (event.target && event.target.id === 'isim') draftName = event.target.value;
+    if (event.target && (event.target.id === 'vol-music' || event.target.id === 'vol-sfx')) {
+      const value = Number(event.target.value) / 100;
+      if (event.target.id === 'vol-music') settings.music = value;
+      else settings.sfx = value;
+      saveSettings();
+      if (window.YSAudio) window.YSAudio.configure(settings);
+    }
   }
 
   function bindAndroidBack() {
@@ -1715,6 +1792,20 @@
 
   function boot() {
     const screen = document.getElementById('screen');
+    document.addEventListener('pointerdown', function once() {
+      if (window.YSAudio) {
+        window.YSAudio.configure(settings);
+        window.YSAudio.unlock();
+        window.YSAudio.menu();
+      }
+    }, { once: true });
+    const splash = document.getElementById('boot-splash');
+    if (splash) {
+      setTimeout(function () {
+        if (window.__holdSplash) return;
+        splash.classList.add('hide');
+      }, 700);
+    }
     screen.addEventListener('click', onClick);
     screen.addEventListener('submit', onSubmit);
     screen.addEventListener('input', onInput);
@@ -1755,6 +1846,8 @@
     if (I18N) I18N.setLang(settings.lang || 'tr');
     registerNames();
     if (window.YSAds) window.YSAds.init();
+    if (window.YSAudio) window.YSAudio.configure(settings);
+    if (window.YSNotify && settings.notifyAsked && settings.notify !== false) window.YSNotify.sync(state, settings);
     bindAndroidBack();
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', function () {

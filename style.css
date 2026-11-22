@@ -441,13 +441,36 @@ input {
 @media (max-height: 700px) {
   .hero { padding-top: 4px; }
   .logo-ball { width: 56px; height: 56px; }
+  .logo-img { width: min(56%, 200px); }
   .lede { display: none; }
+  .menu-page { gap: 8px; padding-top: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .btn:active, .toast, .page, .match { transition: none; animation: none; }
 }
 
+.boot-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  background: #0b2a1c url('splash.png') center / cover no-repeat;
+  transition: opacity 0.35s ease;
+}
+.boot-splash.hide { opacity: 0; }
+.menu-page {
+  background:
+    linear-gradient(180deg, rgba(8, 22, 14, 0.28) 0%, rgba(8, 22, 14, 0.9) 58%, #08140e 100%),
+    url('hero.png') center 22% / cover no-repeat;
+}
+.logo-img {
+  width: min(88%, 320px);
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.5));
+}
 .page, .match { animation: rise 0.24s ease; }
 @keyframes rise {
   from { opacity: 0.35; transform: translateY(8px); }

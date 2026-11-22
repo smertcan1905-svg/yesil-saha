@@ -299,6 +299,7 @@
       };
       phase = 'fly';
       setNext(false);
+      sfx('attack');
     }
 
     function commitOutcome() {

@@ -279,7 +279,7 @@
   }
 
   function share(code) {
-    const title = 'Yeşil Saha';
+    const title = 'Legend Striker';
     const fileOk = typeof File !== 'undefined';
     const file = fileOk ? new File([code], 'yesil-saha.ysave', { type: 'text/plain' }) : null;
     if (navigator.share) {

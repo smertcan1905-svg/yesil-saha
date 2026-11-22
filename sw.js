@@ -1,5 +1,5 @@
 /* Çevrimdışı önbellek. Ağ varsa taze dosya, yoksa kayıt. */
-const CACHE = 'yesil-saha-v7';
+const CACHE = 'yesil-saha-v8';
 const ASSETS = [
   './',
   './index.html',
@@ -15,6 +15,18 @@ const ASSETS = [
   './ads-config.js',
   './ads.js',
   './billing.js',
+  './audio.js',
+  './notify.js',
+  './logo.png',
+  './splash.png',
+  './hero.png',
+  './audio/music.ogg',
+  './audio/crowd.ogg',
+  './audio/whistle.ogg',
+  './audio/kick.ogg',
+  './audio/net.ogg',
+  './audio/ui.ogg',
+  './audio/jingle.ogg',
   './match.js',
   './game.js',
   './manifest.webmanifest',

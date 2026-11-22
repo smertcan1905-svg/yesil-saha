@@ -227,7 +227,12 @@
     return String(v).replace('-', '−');
   }
 
-  function posLabel(pos) { return t(pos === 'ortasaha' ? 'pos.mid' : 'pos.fwd'); }
+  function posLabel(pos) {
+    if (pos === 'kanat') return t('pos.wing');
+    if (pos === 'onnumara') return t('pos.am');
+    if (pos === 'ortasaha') return t('pos.mid');
+    return t('pos.fwd');
+  }
   function attrLabel(key) { return t('attr.' + key); }
   function tierLabel(tier) { return t('tier.' + tier); }
   function leagueLabel(country, tier) {
@@ -427,6 +432,7 @@
   }
 
   function pageHub() {
+    if (L.ensurePlus) L.ensurePlus(state);
     const club = L.clubById(state.clubId);
     const fix = L.userFixture(state);
     const opp = fix && fix.opp;
@@ -460,7 +466,7 @@
           '<button type="button" class="btn ghost" data-act="tutorial-ok">' + esc(t('tutor.skip')) + '</button></article>'
         : '') +
       '<header class="hub-top"><div><p class="eyebrow">' + esc(t('common.season')) + ' ' + state.season + ' · ' + esc(t('common.week')) + ' ' + state.week + '/' + state.rounds.length +
-      '</p><h1>' + esc(state.player.name) + '</h1><p class="sub">' + esc(t('common.age', { n: state.player.age })) + ' · ' + posLabel(state.player.pos) +
+      '</p><h1>' + esc(state.player.name) + '</h1><p class="sub">' + esc(t('common.age', { n: state.player.age })) + ' · ' + posLabel(state.player.role || state.player.pos) +
       ' · ' + L.shirtNumber(state.player.name) + '</p></div>' +
       '<button type="button" class="iconbtn" data-act="settings" aria-label="' + esc(t('menu.settings')) + '">⚙</button></header>' +
       '<div class="club-row">' + crest(club) + '<div class="grow"><strong>' + esc(cname(club)) + '</strong><span>' +
@@ -479,6 +485,7 @@
       '<p>' + esc(opp ? countryLabel(opp.country) + ' · ' + leagueLabel(opp.country, opp.tier) : '') + '</p></article>' +
       '<div class="action-grid">' +
       '<button type="button" class="btn" data-act="train-open">' + esc(t('hub.train')) + '</button>' +
+      '<button type="button" class="btn" data-act="fitness">' + esc(t('hub.fitness')) + '</button>' +
       '<button type="button" class="btn" data-act="rest">' + esc(t('common.rest')) + '</button>' +
       '<button type="button" class="btn" data-act="drink">' + esc(t('hub.drink', { n: state.player.drinks })) + '</button>' +
       '</div>' +
@@ -502,6 +509,8 @@
       '<button type="button" class="btn ghost" data-act="rival">' + esc(t('hub.rival')) + '</button>' +
       '<button type="button" class="btn ghost" data-act="club">' + esc(t('hub.club')) + '</button>' +
       '<button type="button" class="btn ghost" data-act="awards">' + esc(t('hub.awards')) + '</button>' +
+      (state.player.age >= 29 ? '<button type="button" class="btn ghost" data-act="role">' + esc(t('hub.role')) + '</button>' : '') +
+      (state.player.age >= 33 && !state.retired ? '<button type="button" class="btn ghost" data-act="farewell">' + esc(t('retire.offer')) + '</button>' : '') +
       (L.cupDue && L.cupDue(state) ? '<button type="button" class="btn ghost" data-act="cup-play">' + esc(t('hub.cup')) + '</button>' : '') +
       (L.europeDue && L.europeDue(state) ? '<button type="button" class="btn ghost" data-act="euro-night">' + esc(t('hub.europe')) + '</button>' : '') +
       (L.superDue && L.superDue(state) ? '<button type="button" class="btn ghost" data-act="super-play">' + esc(t('cups.super')) + '</button>' : '') +
@@ -520,6 +529,14 @@
   }
 
   function pageTrain() {
+    L.ensurePlus(state);
+    const train = state.train || { focus: 'finishing', xp: {}, points: 0 };
+    const focuses = (L.FOCUSES || []).map(function (row) {
+      const on = train.focus === row.id;
+      const xp = (train.xp && train.xp[row.id]) || 0;
+      return '<div class="focus-row"><button type="button" class="btn tiny' + (on ? ' gold' : '') + '" data-act="focus" data-id="' + row.id + '">' + esc(t('focus.' + row.id)) + '</button>' +
+        '<div class="xp-row"><span>' + xp + '/100</span></div>' + bar(xp, on ? 'good' : '') + '</div>';
+    }).join('');
     const trained = L.trainedAttrs(state);
     const rows = L.ATTRS.map(function (key) {
       const base = state.player.base[key];
@@ -532,10 +549,27 @@
     return '<div class="page">' + topbar(t('train.title')) +
       '<div class="card energy-card"><div class="rel-top"><span>' + esc(t('common.energy')) + '</span><b>' + state.player.energy + '</b></div>' +
       bar(state.player.energy, state.player.energy < L.TRAIN_COST ? 'bad' : 'good') +
-      '<p class="fine">' + esc(t('train.note', { n: L.TRAIN_COST })) + '</p></div>' +
+      '<p class="fine">' + esc(t('train.note', { n: L.TRAIN_COST })) + '</p>' +
+      '<p class="fine">' + esc(t('train.focusNow', { name: t('focus.' + (train.focus || 'finishing')) })) + ' · ' + esc(t('train.points', { n: train.points || 0 })) + '</p>' +
+      '<button type="button" class="btn gold" data-act="focus-work">' + esc(t('train.session')) + '</button></div>' +
+      '<h3 class="section">' + esc(t('train.week')) + '</h3>' + focuses +
+      '<h3 class="section">' + esc(t('train.attrs')) + '</h3>' +
+      '<p class="fine">' + esc(t('train.finishLine', { n: state.player.finish || 0, m: state.player.mental || 0 })) + '</p>' +
       rows +
       '<button type="button" class="btn" data-act="rest">' + esc(t('common.rest')) + '</button>' +
       '</div>';
+  }
+
+  function pageFitness() {
+    L.ensurePlus(state);
+    const fit = L.fitnessReport(state);
+    return '<div class="page">' + topbar(t('fit.title')) +
+      '<article class="card"><h2>' + esc(t('fit.fatigue')) + ' ' + fit.fatigue + '</h2>' + bar(fit.fatigue, fit.fatigue > 60 ? 'bad' : 'mid') +
+      '<p>' + esc(t('fit.risk', { n: fit.risk })) + '</p>' + bar(fit.risk, fit.risk > 40 ? 'bad' : 'good') +
+      '<p class="fine">' + esc(fit.weeks ? t('fit.out', { d: fit.days, w: fit.weeks }) : t('fit.fit')) + '</p></article>' +
+      '<button type="button" class="btn" data-act="doctor">' + esc(t('fit.doctor')) + '</button>' +
+      '<button type="button" class="btn gold" data-act="physio">' + esc(t('fit.physio')) + '</button>' +
+      '<p class="fine">' + esc(t('fit.note')) + '</p></div>';
   }
 
   function pageShop() {
@@ -586,6 +620,7 @@
   }
 
   function pageProfile() {
+    if (L.ensurePlus) L.ensurePlus(state);
     const trained = L.trainedAttrs(state);
     const attrs = L.ATTRS.map(function (key) {
       return '<div class="rel"><div class="rel-top"><span>' + esc(attrLabel(key)) + '</span><b>' + trained[key] + '</b></div>' +
@@ -601,7 +636,7 @@
       : '';
     return '<div class="page">' + topbar(t('profile.title')) +
       '<div class="card idcard">' + crest(L.clubById(state.clubId)) + '<div><h2>' + esc(state.player.name) + '</h2><p>' +
-      esc(t('common.age', { n: state.player.age })) + ' · ' + posLabel(state.player.pos) + ' · ' + esc(t('profile.no', { n: L.shirtNumber(state.player.name) })) + '<br>' +
+      esc(t('common.age', { n: state.player.age })) + ' · ' + posLabel(state.player.role || state.player.pos) + ' · ' + esc(t('profile.familiar', { n: state.player.familiar || 0 })) + '<br>' +
       esc(countryLabel(state.country)) + ' · ' + esc(leagueLabel(state.country, state.tier)) + ' · ' + esc(t('profile.wage', { n: L.formatMoney(state.wage) })) + '</p></div></div>' +
       captain +
       '<h3 class="section">' + esc(t('profile.attrs')) + '</h3>' + attrs +
@@ -613,7 +648,7 @@
       '<p class="fine">' + esc(t('profile.career', { g: state.history.goals, a: state.history.assists, m: state.history.matches })) + '</p>' +
       '<button type="button" class="btn ghost" data-act="barber">' + esc(t('hub.barber')) + '</button>' +
       '<button type="button" class="btn ghost" data-act="menu">' + esc(t('profile.menu')) + '</button>' +
-      '<button type="button" class="textbtn" data-act="retire">' + esc(t('profile.retire')) + '</button>' +
+      (state.player.age >= 33 ? '<button type="button" class="textbtn" data-act="farewell">' + esc(t('retire.offer')) + '</button>' : '') +
       sheet + '</div>';
   }
 
@@ -688,6 +723,7 @@
       '<h1 class="logo small">' + esc(say(review.headline)) + '</h1>' +
       '<p class="helptext">' + esc(t('season.line', { r: review.rank, g: review.goals, a: review.assists, age: review.age })) + '</p>' +
       award + prize + decline +
+      ((review.ageNotes && review.ageNotes.length) ? '<p class="fine">' + esc(review.ageNotes.join(' ')) + '</p>' : '') +
       renderTable(review.table, review.clubId, review.tierBefore, state.country) +
       (review.retired ? '<p class="news">' + esc(t('season.body')) + '</p>' : '<h3 class="section">' + esc(t('season.offers')) + '</h3>' + offers) +
       '<button type="button" class="btn gold" data-act="season-next">' + esc(nextLabel) + '</button></div>';
@@ -793,23 +829,29 @@
   }
 
   function pageMatch() {
-    const pen = state.live ? state.live.tiredPen : 0;
-    return '<div class="match">' +
-      '<header class="match-hud"><div><div id="match-score" class="match-score">' + esc(t('match.title')) + '</div>' +
-      '<div class="match-meta"><strong id="match-minute"></strong> <span id="match-sub"></span></div>' +
-      (pen >= 8 ? '<p class="warn tight">' + esc(t('match.tired', { n: pen })) + '</p>' : '') +
-      '</div><button type="button" class="iconbtn" data-act="sound">' + (settings.sound ? esc(t('menu.soundShort')) : esc(t('menu.mute'))) + '</button></header>' +
+    const me = state.live ? L.clubById(state.clubId) : null;
+    const opp = state.live ? L.clubById(state.live.oppId) : null;
+    return '<div class="match fm">' +
+      '<header class="fm-top"><div class="fm-scoreline">' + crest(me) +
+      '<div><div id="match-score" class="match-score">0 – 0</div>' +
+      '<div class="match-meta"><strong id="match-minute">0\'</strong> <span id="match-sub"></span></div></div>' +
+      crest(opp) + '</div>' +
+      '<div class="fm-bar" aria-hidden="true"><i id="match-progress"></i></div></header>' +
       '<div id="match-card" class="match-card" hidden></div>' +
       '<div class="pitch-wrap"><canvas id="pitch" aria-label="' + esc(t('match.pitch')) + '"></canvas></div>' +
       '<div id="match-ticker" class="ticker"></div>' +
+      '<div id="match-panel" class="match-panel" hidden></div>' +
       '<div id="match-tools" class="match-tools">' +
+      '<button type="button" data-act="flow-speed" data-mult="1" class="on">1×</button>' +
+      '<button type="button" data-act="flow-speed" data-mult="2">2×</button>' +
+      '<button type="button" data-act="flow-speed" data-mult="4">4×</button>' +
       '<button type="button" data-act="flow-pause">' + esc(t('flow.pause')) + '</button>' +
-      '<button type="button" data-act="flow-speed">' + esc(t('flow.fast')) + '</button>' +
-      '<button type="button" data-act="flow-skip">' + esc(t('flow.skip')) + '</button>' +
+      '<button type="button" data-act="flow-stats">' + esc(t('flow.stats')) + '</button>' +
+      '<button type="button" data-act="flow-tactics">' + esc(t('flow.tactics')) + '</button>' +
       '<button type="button" data-act="onetwo" hidden>' + esc(t('flow.onetwo')) + '</button>' +
       '</div>' +
       '<p id="match-hint">' + esc(t('match.hint')) + '</p>' +
-      '<button type="button" id="match-next" class="btn gold" data-act="match-next" hidden>' + esc(t('match.next')) + '</button>' +
+      '<button type="button" id="match-next" class="btn gold" data-act="match-next" hidden>' + esc(t('flow.start')) + '</button>' +
       '</div>';
   }
 
@@ -1153,21 +1195,50 @@
 
   function pageRole() {
     L.ensurePlus(state);
-    const pitch = L.positionPitch(state);
-    return '<div class="page">' + topbar(t('profile.title')) +
-      '<article class="card"><p>' + esc(pitch ? pitch.text : '—') + '</p></article>' +
-      (pitch ? '<button type="button" class="btn gold" data-act="plus" data-kind="role-yes">' + esc(t('talk.take')) + '</button>' +
-        '<button type="button" class="btn ghost" data-act="plus" data-kind="role-no">' + esc(t('hub.stay')) + '</button>' : '') +
-      '</div>';
+    const pitch = L.positionOptions ? L.positionOptions(state) : null;
+    const familiar = state.player.familiar || 0;
+    const choices = pitch ? pitch.options.map(function (role) {
+      return '<button type="button" class="btn gold" data-act="plus" data-kind="role-yes" data-id="' + role + '">' + esc(t('role.' + role)) + '</button>';
+    }).join('') + '<button type="button" class="btn ghost" data-act="plus" data-kind="role-no">' + esc(t('role.stay')) + '</button>' : '';
+    const body = pitch ? pitch.text : (state.player.age < 29 ? t('role.wait', { n: state.player.age }) : t('role.locked'));
+    return '<div class="page">' + topbar(t('role.title')) +
+      '<article class="card"><p>' + esc(body) + '</p>' +
+      '<p class="fine">' + esc(t('role.now', { role: posLabel(state.player.role || state.player.pos), n: familiar })) + '</p>' +
+      bar(familiar, familiar >= 70 ? 'good' : 'mid') + '</article>' + choices + '</div>';
+  }
+
+  function pageFarewell() {
+    const h = state.history || {};
+    return '<div class="page">' + topbar(t('retire.offer')) +
+      '<article class="card ceremony"><p class="eyebrow">' + esc(t('retire.kicker')) + '</p><h2>' + esc(state.player.name) + '</h2>' +
+      '<p>' + esc(t('retire.body', { age: state.player.age })) + '</p>' +
+      '<p class="fine">' + esc(t('retire.line', { g: h.goals || 0, a: h.assists || 0, m: h.matches || 0 })) + '</p></article>' +
+      '<button type="button" class="btn gold" data-act="farewell-play">' + esc(t('retire.play')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="farewell-skip">' + esc(t('retire.skip')) + '</button></div>';
+  }
+
+  function pageHall() {
+    const h = state.history || {};
+    const trophies = (state.trophies || []).map(function (row) {
+      return '<li><b>' + esc(say(row.name)) + '</b><span>' + esc(t('hall.season', { n: row.season })) + '</span></li>';
+    }).join('');
+    return '<div class="page">' + topbar(t('hall.title')) +
+      '<article class="card ceremony"><p class="eyebrow">' + esc(t('hall.kicker')) + '</p><h2>' + esc(state.player.name) + '</h2>' +
+      '<p>' + esc(t('hall.line', { g: h.goals || 0, a: h.assists || 0, t: h.titles || 0, s: h.seasons || state.season || 1 })) + '</p></article>' +
+      '<h3 class="section">' + esc(t('hall.board')) + '</h3>' +
+      (trophies ? '<ul class="fixtures">' + trophies + '</ul>' : '<p class="fine">' + esc(t('hall.empty')) + '</p>') +
+      '<button type="button" class="btn gold" data-act="epilogue">' + esc(t('hall.next')) + '</button></div>';
   }
 
   function pageAfter() {
     const summary = state.after;
-    return '<div class="page">' + topbar(t('profile.retireTitle')) +
-      (summary ? '<article class="card"><h3>' + esc(summary.path) + '</h3><p>' + esc(summary.text) + '</p><p class="fine">' + (summary.goals || 0) + ' / ' + (summary.assists || 0) + '</p></article>' :
-        '<button type="button" class="btn" data-act="plus" data-kind="after" data-id="coach">Coach</button>' +
-        '<button type="button" class="btn" data-act="plus" data-kind="after" data-id="pundit">Pundit</button>' +
-        '<button type="button" class="btn gold" data-act="plus" data-kind="after" data-id="ambassador">Ambassador</button>') +
+    const paths = ['coach', 'pundit', 'director', 'academy'].map(function (id) {
+      return '<button type="button" class="btn" data-act="plus" data-kind="after" data-id="' + id + '">' + esc(t('after.' + id)) + '</button>';
+    }).join('');
+    return '<div class="page">' + topbar(t('after.title')) +
+      (summary ? '<article class="card ceremony"><p class="eyebrow">' + esc(t('after.' + summary.path)) + '</p><h2>' + esc(t('after.epilogue')) + '</h2><p>' + esc(summary.text) + '</p><p class="fine">' + (summary.goals || 0) + ' / ' + (summary.assists || 0) + '</p></article>' +
+        '<button type="button" class="btn gold" data-act="new">' + esc(t('menu.new')) + '</button>' :
+        '<p>' + esc(t('after.pick')) + '</p>' + paths) +
       '</div>';
   }
 
@@ -1218,16 +1289,24 @@
 
   function pageAwards() {
     const awards = L.globalAwards(state);
-    const list = awards.top30.slice(0, 10).map(function (row, i) {
-      return '<li class="' + (row.me ? 'me' : '') + '"><b>' + (i + 1) + '. ' + esc(row.name) + '</b><span>' + row.nat + '</span></li>';
+    const revealed = !!state.awardReveal;
+    const place = awards.meRank >= 0 ? awards.meRank + 1 : (awards.meAt >= 0 ? awards.meAt + 1 : null);
+    const list = awards.top30.map(function (row, i) {
+      return '<li class="' + (row.me ? 'me' : '') + '"><b>' + (i + 1) + '. ' + esc(row.name) + '</b><span>' + esc(row.nat || '') + '</span></li>';
     }).join('');
-    return '<div class="page">' + topbar(t('hub.awards')) +
-      '<article class="card"><h2>Altın Yıldız Ödülü</h2><p>' + esc(awards.star ? awards.star.name : '') + '</p><p class="fine">' + (awards.meAt >= 0 ? awards.meAt + 1 : '—') + '</p></article>' +
-      '<p>Genç Yıldız: ' + esc(awards.rising ? awards.rising.name : '—') + '</p>' +
-      '<p>Altın Eldiven: ' + esc(awards.glove ? awards.glove.name : '—') + '</p>' +
-      '<p>Yılın Golü: ' + esc(awards.goal ? awards.goal.name : '—') + '</p>' +
-      '<p>Yılın Teknik Direktörü: ' + esc(awards.coach ? awards.coach.name : '—') + '</p>' +
-      '<ul class="fixtures">' + list + '</ul></div>';
+    const star = awards.star;
+    const reveal = revealed && star
+      ? '<article class="card ceremony winner"><p class="eyebrow">' + esc(t('award.star')) + '</p><h2>' + esc(star.name) + '</h2><p>' + esc(star.me ? t('award.you') : t('award.other', { n: place || '—' })) + '</p></article>'
+      : '<button type="button" class="btn gold" data-act="award-reveal">' + esc(t('award.reveal')) + '</button>';
+    return '<div class="page">' + topbar(t('award.title')) +
+      '<article class="card"><h2>' + esc(t('award.star')) + '</h2><p>' + esc(t('award.place', { n: place || '—' })) + '</p></article>' +
+      reveal +
+      '<h3 class="section">' + esc(t('award.season')) + '</h3>' +
+      '<p>' + esc(t('award.rising')) + ': ' + esc(awards.rising ? awards.rising.name : '—') + '</p>' +
+      '<p>' + esc(t('award.glove')) + ': ' + esc(awards.glove ? awards.glove.name : '—') + '</p>' +
+      '<p>' + esc(t('award.goal')) + ': ' + esc(awards.goal ? awards.goal.name : '—') + '</p>' +
+      '<p>' + esc(t('award.coach')) + ': ' + esc(awards.coach ? awards.coach.name : '—') + '</p>' +
+      '<h3 class="section">' + esc(t('award.top')) + '</h3><ul class="fixtures">' + list + '</ul></div>';
   }
 
   function pageMoves() {
@@ -1277,6 +1356,9 @@
     if (name === 'window') return pageWindow();
     if (name === 'loan') return pageLoan();
     if (name === 'role') return pageRole();
+    if (name === 'farewell') return pageFarewell();
+    if (name === 'hall') return pageHall();
+    if (name === 'fitness') return pageFitness();
     if (name === 'after') return pageAfter();
     if (name === 'rival') return pageRival();
     if (name === 'kings') return pageKings();
@@ -1746,6 +1828,53 @@
     if (act === 'confirm-start') { doStart(true); return; }
     if (!state) return;
     if (act === 'train-open') { askTired = false; go('train', 'hub'); return; }
+    if (act === 'fitness') { go('fitness', 'hub'); return; }
+    if (act === 'focus') {
+      const res = L.setWeeklyFocus(state, btn.dataset.id);
+      save();
+      toast(res.message);
+      go('train', 'hub');
+      return;
+    }
+    if (act === 'focus-work') {
+      const res = L.workFocus(state);
+      save();
+      toast(res.message);
+      go('train', 'hub');
+      return;
+    }
+    if (act === 'doctor' || act === 'physio') {
+      const res = act === 'doctor' ? L.seeDoctor(state) : L.seePhysio(state);
+      save();
+      toast(res.message);
+      go('fitness', 'hub');
+      return;
+    }
+    if (act === 'farewell') { go('farewell', 'hub'); return; }
+    if (act === 'farewell-play') {
+      state.farewellMatch = true;
+      save();
+      go('match');
+      return;
+    }
+    if (act === 'farewell-skip') {
+      state.farewellDone = true;
+      save();
+      go('hall', 'farewell');
+      return;
+    }
+    if (act === 'epilogue') {
+      if (L.retireCareer) L.retireCareer(state);
+      save();
+      go('after', 'hall');
+      return;
+    }
+    if (act === 'award-reveal') {
+      state.awardReveal = true;
+      save();
+      go('awards');
+      return;
+    }
     if (act === 'train') {
       const res = L.train(state, btn.dataset.attr);
       save();
@@ -1902,7 +2031,7 @@
     if (act === 'result-next') {
       const next = L.continueResult(state);
       save();
-      go(next === 'season' ? 'season' : 'hub');
+      go(next === 'season' ? 'season' : next === 'hall' ? 'hall' : next === 'after' ? 'after' : 'hub');
       return;
     }
     if (act === 'life') { go('life', 'hub'); return; }
@@ -1915,7 +2044,7 @@
     if (act === 'room') { go('room', 'hub'); return; }
     if (act === 'window') { go('window', 'hub'); return; }
     if (act === 'loan') { go('loan', 'window'); return; }
-    if (act === 'role') { go('role', 'profile'); return; }
+    if (act === 'role') { go('role', 'hub'); return; }
     if (act === 'rival') { go('rival', 'hub'); return; }
     if (act === 'club') { state.lookClub = state.clubId; go('club', 'hub'); return; }
     if (act === 'awards') { go('awards', 'hub'); return; }
@@ -1932,7 +2061,7 @@
       else if (kind === 'sign') res = L.acceptDeadline(state);
       else if (kind === 'stay') res = L.stayPut(state);
       else if (kind === 'loan-yes') res = L.acceptLoan(state);
-      else if (kind === 'role-yes') res = L.acceptPosition(state);
+      else if (kind === 'role-yes') res = L.acceptPosition(state, id);
       else if (kind === 'role-no') res = L.declinePosition(state);
       else if (kind === 'after') res = L.chooseAfter(state, id);
       if ((kind === 'sign' || kind === 'loan-yes') && window.YSTelemetry) window.YSTelemetry.logEvent('transfer', { kind: kind });

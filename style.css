@@ -365,13 +365,19 @@ input {
   max-width: 100%;
   max-height: 100%;
 }
+.match.fm { padding: 6px 8px 8px; gap: 6px; }
+.fm-top { flex-shrink: 0; }
+.fm-scoreline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fm-scoreline .match-score { text-align: center; }
+.fm-bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,0.12); overflow: hidden; margin-top: 6px; }
+.fm-bar i { display: block; height: 100%; width: 0; background: #ffd56a; }
 .match-card {
   position: absolute;
-  z-index: 5;
-  left: 12px;
-  right: 12px;
-  top: 64px;
-  bottom: 12px;
+  z-index: 6;
+  left: 8px;
+  right: 8px;
+  top: 72px;
+  bottom: 8px;
   overflow: auto;
   background: #102216;
   border: 1px solid rgba(255, 213, 106, 0.25);
@@ -381,9 +387,32 @@ input {
   flex-direction: column;
   gap: 8px;
 }
+.card-go { margin-top: auto; position: sticky; bottom: 0; z-index: 2; flex-shrink: 0; }
+.match-card[hidden] { display: none !important; }
+#match-next[hidden] { display: none !important; }
+.match.card-on #match-next { display: block; }
+.ceremony { text-align: center; }
+.ceremony h2 { font-size: 28px; margin: 6px 0; }
+.winner { border-color: rgba(255, 213, 106, 0.7); }
+.focus-row { margin-bottom: 8px; }
+.xp-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.fixtures li.me { outline: 1px solid rgba(255, 213, 106, 0.7); }
 .match.card-on .pitch-wrap,
 .match.card-on #match-tools,
-.match.card-on .ticker { visibility: hidden; }
+.match.card-on .ticker,
+.match.card-on #match-hint,
+.match.card-on #match-panel { visibility: hidden; }
+.match-panel {
+  position: absolute;
+  z-index: 4;
+  left: 8px;
+  right: 8px;
+  bottom: 64px;
+  background: rgba(8, 22, 14, 0.94);
+  border: 1px solid rgba(255, 213, 106, 0.3);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
 .ticker { min-height: 2.4em; color: var(--muted); font-size: 13px; }
 .ticker p { margin: 0; }
 .match-tools { display: flex; gap: 6px; }

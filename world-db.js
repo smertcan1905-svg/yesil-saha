@@ -340,6 +340,7 @@
     const pool = awardPool(state);
     const top30 = pool.slice(0, 30);
     const meIndex = top30.findIndex(function (r) { return r.me; });
+    const meRank = pool.findIndex(function (r) { return r.me; });
     const young = pool.filter(function (r) { return r.age <= 21; })[0] || null;
     const gks = [];
     L.CLUBS.forEach(function (club) {
@@ -364,6 +365,7 @@
       star: top30[0],
       top30: top30,
       meAt: meIndex,
+      meRank: meRank,
       rising: young,
       glove: gks[0] || null,
       goal: pool.filter(function (p) { return p.pos === 'ST' || p.pos === 'W'; })[0] || pool[0],

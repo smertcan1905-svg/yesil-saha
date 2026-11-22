@@ -68,7 +68,159 @@
     if (!state.scorerTable || state.scorerClub !== state.clubId || state.scorerSeason !== state.season) seedScorers(state);
     if (!state.window) refreshWindow(state);
     if (typeof state.releaseClause !== 'number') state.releaseClause = Math.round(state.wage * 28 / 10) * 10;
+    ensureCareer(state);
     return state;
+  }
+
+  const FOCUSES = [
+    { id: 'finishing', tr: 'Bitiricilik', en: 'Finishing' },
+    { id: 'pace', tr: 'Hız', en: 'Pace' },
+    { id: 'passing', tr: 'Pas', en: 'Passing' },
+    { id: 'dribbling', tr: 'Çalım', en: 'Dribbling' },
+    { id: 'physical', tr: 'Fizik', en: 'Physical' },
+    { id: 'mental', tr: 'Mental', en: 'Mental' },
+  ];
+
+  function ensureCareer(state) {
+    if (!state.player.role) state.player.role = state.player.pos === 'ortasaha' ? 'ortasaha' : 'kanat';
+    if (typeof state.player.familiar !== 'number') state.player.familiar = 64;
+    if (typeof state.player.finish !== 'number') state.player.finish = state.player.base.teknik;
+    if (typeof state.player.mental !== 'number') state.player.mental = 48;
+    if (typeof state.player.fatigue !== 'number') state.player.fatigue = Math.max(0, 100 - (state.player.energy || 80));
+    if (!state.train) state.train = { focus: 'finishing', xp: {}, points: 0, weekKey: '' };
+    FOCUSES.forEach(function (row) {
+      if (typeof state.train.xp[row.id] !== 'number') state.train.xp[row.id] = 10;
+    });
+    if (typeof state.train.points !== 'number') state.train.points = 0;
+  }
+
+  function focusById(id) {
+    return FOCUSES.filter(function (row) { return row.id === id; })[0] || FOCUSES[0];
+  }
+
+  function applyFocusGain(state, id, amount) {
+    ensureCareer(state);
+    const key = focusById(id).id;
+    state.train.xp[key] = (state.train.xp[key] || 0) + amount;
+    let gained = 0;
+    while (state.train.xp[key] >= 100) {
+      state.train.xp[key] -= 100;
+      state.train.points += 1;
+      gained += 1;
+    }
+    return gained;
+  }
+
+  function applyPointTo(state, id) {
+    const b = state.player.base;
+    if (id === 'pace') b.hiz = Math.min(99, b.hiz + 1);
+    else if (id === 'passing') b.vizyon = Math.min(99, b.vizyon + 1);
+    else if (id === 'dribbling') b.teknik = Math.min(99, b.teknik + 1);
+    else if (id === 'physical') b.guc = Math.min(99, b.guc + 1);
+    else if (id === 'mental') state.player.mental = Math.min(99, (state.player.mental || 48) + 1);
+    else state.player.finish = Math.min(99, (state.player.finish || 40) + 1);
+  }
+
+  function setWeeklyFocus(state, id) {
+    ensureCareer(state);
+    const key = (state.season || 1) + '-' + (state.week || 1);
+    if (state.train.weekKey === key && state.train.focus) {
+      return { ok: false, message: tx({ tr: 'Bu haftanın odağı kilitli: ' + tx(focusById(state.train.focus)) + '.', en: 'This week’s focus is locked: ' + tx(focusById(state.train.focus)) + '.' }) };
+    }
+    state.train.focus = focusById(id).id;
+    state.train.weekKey = key;
+    return { ok: true, message: tx({ tr: 'Haftalık odak: ' + tx(focusById(id)) + '. Çubuk dolunca puan gelir.', en: 'Weekly focus: ' + tx(focusById(id)) + '. A full bar gives a point.' }) };
+  }
+
+  function workFocus(state) {
+    ensureCareer(state);
+    if (state.player.energy < 16) return { ok: false, message: tx({ tr: 'Enerjin yetmiyor. Dinlen.', en: 'Not enough energy. Rest.' }) };
+    state.player.energy -= 16;
+    state.player.fatigue = L.clamp((state.player.fatigue || 0) + 6, 0, 100);
+    const gained = applyFocusGain(state, state.train.focus, 28 + Math.floor(hash(state.week + state.train.focus) % 12));
+    if (gained && state.train.points > 0) {
+      state.train.points -= 1;
+      applyPointTo(state, state.train.focus);
+    }
+    const xp = state.train.xp[state.train.focus] || 0;
+    const label = tx(focusById(state.train.focus));
+    const message = gained
+      ? tx({ tr: label + ' +1. Çubuk ' + xp + '.', en: label + ' +1. Bar at ' + xp + '.' })
+      : tx({ tr: label + ' deneyimi +' + xp + '. Henüz puan yok.', en: label + ' XP is at ' + xp + '. No point yet.' });
+    return { ok: true, message: message, gain: gained };
+  }
+
+  function spendPoint(state, id) {
+    ensureCareer(state);
+    if (state.train.points < 1) return { ok: false, message: tx({ tr: 'Harcanacak puan yok.', en: 'No points to spend.' }) };
+    state.train.points -= 1;
+    applyPointTo(state, id || state.train.focus);
+    return { ok: true, message: tx({ tr: tx(focusById(id || state.train.focus)) + ' +1.', en: tx(focusById(id || state.train.focus)) + ' +1.' }) };
+  }
+
+  function fitnessReport(state) {
+    ensureCareer(state);
+    const age = state.player.age || 16;
+    const fatigue = L.clamp(state.player.fatigue || 0, 0, 100);
+    let risk = Math.round(fatigue * 0.42);
+    if (age >= 30) risk += (age - 29) * 2;
+    if ((state.player.energy || 0) < 30) risk += 10;
+    if ((state.player.mental || 0) >= 70) risk -= 6;
+    risk = L.clamp(risk, 3, 82);
+    const weeks = state.player.injured || 0;
+    return { fatigue: fatigue, risk: risk, weeks: weeks, days: weeks * 7, energy: state.player.energy || 0 };
+  }
+
+  function seeDoctor(state) {
+    const fit = fitnessReport(state);
+    state.player.fatigue = L.clamp(fit.fatigue - 14, 0, 100);
+    state.player.energy = L.clamp((state.player.energy || 0) + 8, 0, 100);
+    if (state.player.injured > 1 && hash(state.week + 'doc') % 3 !== 0) {
+      state.player.injured -= 1;
+      return { ok: true, message: tx({ tr: 'Kulüp doktoru süreyi 1 hafta kısalttı. Kalan ' + (state.player.injured * 7) + ' gün.', en: 'The club doctor cut a week. ' + (state.player.injured * 7) + ' days left.' }) };
+    }
+    if (state.player.injured === 1 && hash(state.week + 'doc') % 2 === 0) {
+      state.player.injured = 0;
+      return { ok: true, message: tx({ tr: 'Doktor sahaya çıkabileceğini söyledi.', en: 'The doctor cleared you to play.' }) };
+    }
+    return { ok: true, message: tx({ tr: 'Doktor yorgunluğu düşürdü. Sakatlık riski %' + fitnessReport(state).risk + '.', en: 'The doctor eased the fatigue. Injury risk ' + fitnessReport(state).risk + '%.' }) };
+  }
+
+  function seePhysio(state) {
+    const cost = Math.max(80, Math.round((state.wage || 200) * 0.35));
+    if (state.player.money < cost) return { ok: false, message: tx({ tr: 'Fizyoterapist için ' + L.formatMoney(cost) + ' lazım.', en: 'The physio costs ' + L.formatMoney(cost) + '.' }) };
+    state.player.money -= cost;
+    state.player.fatigue = L.clamp((state.player.fatigue || 0) - 28, 0, 100);
+    state.player.energy = L.clamp((state.player.energy || 0) + 16, 0, 100);
+    if (state.player.injured > 0) state.player.injured -= 1;
+    const left = (state.player.injured || 0) * 7;
+    return { ok: true, message: tx({ tr: 'Özel fizyo ' + L.formatMoney(cost) + '. Kalan iyileşme ' + left + ' gün. Risk %' + fitnessReport(state).risk + '.', en: 'Private physio ' + L.formatMoney(cost) + '. Recovery left: ' + left + ' days. Risk ' + fitnessReport(state).risk + '%.' }) };
+  }
+
+  function applyAgeCurve(state) {
+    ensureCareer(state);
+    const age = state.player.age;
+    const b = state.player.base;
+    const notes = [];
+    if (age >= 30) {
+      const drop = age >= 34 ? 2 : 1;
+      b.hiz = Math.max(16, b.hiz - drop);
+      notes.push(tx({ tr: 'Hız −' + drop + ' (30’dan sonra düşer).', en: 'Pace −' + drop + ' (it falls after 30).' }));
+    }
+    if (age >= 33) b.guc = Math.max(16, b.guc - 1);
+    if (age >= 27 && age <= 33 && b.vizyon < 94) {
+      b.vizyon += 1;
+      notes.push(tx({ tr: 'Vizyon +1. Zirve daha geç gelebilir.', en: 'Vision +1. It can peak later.' }));
+    }
+    if (age >= 26 && age <= 32 && state.player.finish < 96) {
+      state.player.finish += 1;
+      notes.push(tx({ tr: 'Bitiricilik +1.', en: 'Finishing +1.' }));
+    } else if (age >= 36) state.player.finish = Math.max(18, state.player.finish - 1);
+    if (age >= 29 && age <= 36 && state.player.mental < 95) state.player.mental += 1;
+    state.player.familiar = Math.min(100, (state.player.familiar || 40) + 16);
+    state.roleDeclinedSeason = null;
+    state.ageNotes = notes;
+    if (state.review) state.review.ageNotes = notes;
   }
 
   function makeSquad(state) {
@@ -377,27 +529,43 @@
     return { ok: true, message: tx({ tr: 'Kiralık gittin. Satın alma opsiyonu ' + L.formatMoney(offer.buy) + '.', en: 'You went on loan. Buy option ' + L.formatMoney(offer.buy) + '.' }) };
   }
 
-  function positionPitch(state) {
+  function positionOptions(state) {
     ensurePlus(state);
-    if (state.player.age < 30 && state.player.base.hiz >= 40) return null;
-    const to = state.player.pos === 'forvet' ? 'ortasaha' : 'forvet';
-    const text = state.player.pos === 'forvet'
-      ? { tr: 'Hoca: Hızın düşüyor. Onu orta sahaya çekeyim, hedef forvet gibi değil.', en: 'Coach: Your pace is fading. I would drop you into midfield.' }
-      : { tr: 'Hoca: Ceza sahasına daha yakın oynatacağım.', en: 'Coach: I would play you closer to goal.' };
-    return { to: to, text: tx(text) };
+    if (state.player.age < 29) return null;
+    if (state.roleDeclinedSeason === state.season) return null;
+    const role = state.player.role || 'kanat';
+    const options = [];
+    if (role !== 'forvet') options.push('forvet');
+    if (role !== 'onnumara') options.push('onnumara');
+    if (role === 'forvet' && state.player.base.hiz >= 50) options.push('kanat');
+    const text = role === 'kanat'
+      ? { tr: 'Hoca: Hızın kanat için zorlanıyor. Menajerin de santrfor ya da on numara diyor. Karar senin.', en: 'Coach: Pace is getting hard on the wing. Your agent says striker or attacking mid. You choose.' }
+      : { tr: 'Hoca: 29’u geçtin. Rolünü sezon içinde değiştirebilirsin. Alışkanlık maç maç artar.', en: 'Coach: You are past 29. You can change role this season. Familiarity grows match by match.' };
+    return { from: role, options: options.slice(0, 2), text: tx(text), familiar: state.player.familiar || 0 };
   }
 
-  function acceptPosition(state) {
-    const pitch = positionPitch(state);
+  function positionPitch(state) {
+    const pitch = positionOptions(state);
+    if (!pitch || !pitch.options.length) return null;
+    return { to: pitch.options[0], text: pitch.text };
+  }
+
+  function acceptPosition(state, to) {
+    const pitch = positionOptions(state);
     if (!pitch) return { ok: false, message: tx({ tr: 'Rol değişimi yok.', en: 'No role change.' }) };
-    state.player.pos = pitch.to;
-    state.player.base.hiz = Math.max(18, state.player.base.hiz - 1);
-    state.player.base.vizyon = Math.min(99, state.player.base.vizyon + 1);
+    const role = to && pitch.options.indexOf(to) >= 0 ? to : pitch.options[0];
+    state.player.role = role;
+    state.player.pos = (role === 'ortasaha' || role === 'onnumara') ? 'ortasaha' : 'forvet';
+    state.player.familiar = 22;
+    if (role === 'forvet') state.player.finish = Math.min(96, (state.player.finish || 40) + 2);
+    if (role === 'onnumara') state.player.base.vizyon = Math.min(99, state.player.base.vizyon + 2);
     if (state.manager) state.manager.rel = L.clamp(state.manager.rel + 4, 0, 100);
-    return { ok: true, message: tx({ tr: 'Yeni rolün başladı.', en: 'The new role starts now.' }) };
+    state.roleDeclinedSeason = state.season;
+    return { ok: true, message: tx({ tr: 'Yeni mevki başladı. Alışkanlık sezon boyunca artacak.', en: 'The new role starts. Familiarity grows across the season.' }) };
   }
 
   function declinePosition(state) {
+    state.roleDeclinedSeason = state.season;
     if (state.manager) state.manager.rel = L.clamp(state.manager.rel - 2, 0, 100);
     return { ok: true, message: tx({ tr: 'Eski rolünde kaldın.', en: 'You kept the old role.' }) };
   }
@@ -405,13 +573,14 @@
   function chooseAfter(state, path) {
     if (!state.retired && L.retireCareer) L.retireCareer(state);
     const lines = {
-      coach: { tr: 'Altyapıda başladın. Üç karar sonra küçük bir kulübün hocasısın.', en: 'You started with the youth side. Three calls later you coach a small club.' },
-      pundit: { tr: 'Stüdyo ışığı yandı. Maçları anlatıyorsun.', en: 'The studio lights came on. You talk through the matches.' },
-      ambassador: { tr: 'Kulüp seni elçi yaptı. Tribün hâlâ adını bağırıyor.', en: 'The club made you an ambassador. The stand still shouts your name.' },
+      coach: { tr: 'Küçük bir kulübün hocası oldun. İlk konuşman soyunma odasında.', en: 'You became coach of a small club. The first talk is in the dressing room.' },
+      pundit: { tr: 'Stüdyo ışığı yandı. Maçları ekrandan anlatıyorsun.', en: 'The studio lights came on. You talk through the matches on television.' },
+      director: { tr: 'Sportif direktör oldun. Transfer listesi artık senin masanda.', en: 'You became sporting director. The transfer list sits on your desk.' },
+      academy: { tr: 'Akademinin başına geçtin. 16 yaşındaki bir forvet senin kapında.', en: 'You took the academy. A 16-year-old striker is at your door.' },
     };
     state.after = {
       path: path,
-      text: tx(lines[path] || lines.ambassador),
+      text: tx(lines[path] || lines.academy),
       goals: state.history ? state.history.goals : 0,
       assists: state.history ? state.history.assists : 0,
       titles: state.history ? state.history.titles : 0,
@@ -439,9 +608,46 @@
 
   const origComplete = L.completeMatch;
   L.completeMatch = function (state, report) {
+    if (state && state.farewellMatch) {
+      state.farewellMatch = false;
+      state.farewellDone = true;
+      const goals = (report && report.goals) || 0;
+      const oppGoals = (report && report.oppGoals) || 0;
+      state.lastMatch = {
+        oppId: state.clubId,
+        home: true,
+        us: Math.max(goals, 1),
+        them: oppGoals,
+        result: goals > oppGoals ? 'win' : goals === oppGoals ? 'draw' : 'loss',
+        week: state.week,
+        goals: goals,
+        assists: (report && report.assists) || 0,
+        rating: 8.2,
+        moments: [{ minute: 80, text: tx({ tr: 'Jübile. Tribün adını söyledi.', en: 'Testimonial. The stand said your name.' }) }],
+        testimonial: true,
+      };
+      if (state.history) {
+        state.history.matches = (state.history.matches || 0) + 1;
+        state.history.goals = (state.history.goals || 0) + goals;
+      }
+      state.live = null;
+      state.phase = 'result';
+      state.afterResult = 'hall';
+      state.player.energy = L.clamp((state.player.energy || 0) - 8, 0, 100);
+      return { ok: true, match: state.lastMatch };
+    }
     const res = origComplete(state, report);
     if (res && res.ok && state && state.player) {
       ensurePlus(state);
+      state.player.familiar = Math.min(100, (state.player.familiar || 40) + 6);
+      state.player.fatigue = L.clamp((state.player.fatigue || 0) + 12 + (state.player.age >= 32 ? 4 : 0), 0, 100);
+      if (!state.player.injured) {
+        const fit = fitnessReport(state);
+        if (hash((state.season || 1) + '|' + state.week + '|inj') % 100 < Math.round(fit.risk * 0.28)) {
+          state.player.injured = state.player.age >= 32 ? 2 : 1;
+          if (state.news) state.news.unshift(tx({ tr: 'Sakatlandın. İyileşme ' + (state.player.injured * 7) + ' gün.', en: 'You got injured. Recovery is ' + (state.player.injured * 7) + ' days.' }));
+        }
+      }
       const cost = weeklyUpkeep(state);
       if (cost && state.news) state.news.unshift(tx({ tr: 'Haftalık hayat masrafı ' + L.formatMoney(cost) + '.', en: 'Weekly life cost ' + L.formatMoney(cost) + '.' }));
       if (state.rival) {
@@ -475,7 +681,7 @@
       const res = origFinish(state);
       if (state && state.player) {
         ensurePlus(state);
-        if (state.player.age >= 32) state.player.base.hiz = Math.max(18, state.player.base.hiz - 1);
+        applyAgeCurve(state);
         const goals = sortedBoard(scorerRows(state), 'goals');
         const assists = sortedBoard(scorerRows(state), 'assists');
         state.trophies = state.trophies || [];
@@ -509,9 +715,47 @@
   L.rollLoan = rollLoan;
   L.acceptLoan = acceptLoan;
   L.positionPitch = positionPitch;
+  L.positionOptions = positionOptions;
   L.acceptPosition = acceptPosition;
   L.declinePosition = declinePosition;
   L.chooseAfter = chooseAfter;
+  L.FOCUSES = FOCUSES;
+  L.setWeeklyFocus = setWeeklyFocus;
+  L.workFocus = workFocus;
+  L.spendPoint = spendPoint;
+  L.fitnessReport = fitnessReport;
+  L.seeDoctor = seeDoctor;
+  L.seePhysio = seePhysio;
+  L.applyAgeCurve = applyAgeCurve;
+
+  const origAttrs = L.matchAttrs;
+  if (origAttrs) {
+    L.matchAttrs = function (state) {
+      const a = origAttrs(state);
+      if (!state || !state.player) return a;
+      if (typeof state.player.familiar === 'number' && state.player.familiar < 45) {
+        a.teknik = Math.max(1, a.teknik - 2);
+        a.vizyon = Math.max(1, a.vizyon - 1);
+      }
+      if (state.player.finish >= 70) a.teknik = Math.min(99, a.teknik + 1);
+      if (state.player.mental >= 75) a.vizyon = Math.min(99, a.vizyon + 1);
+      return a;
+    };
+  }
+
+  const origTrain = L.train;
+  if (origTrain) {
+    L.train = function (state, attr) {
+      const res = origTrain(state, attr);
+      if (res && res.ok && state) {
+        ensureCareer(state);
+        const map = { hiz: 'pace', guc: 'physical', teknik: 'dribbling', vizyon: 'passing', frikik: 'finishing' };
+        const gained = applyFocusGain(state, map[attr] || state.train.focus, 16);
+        if (gained) res.message = (res.message || '') + ' ' + tx({ tr: 'Puan geldi.', en: 'A point landed.' });
+      }
+      return res;
+    };
+  }
   L.agentAdvice = agentAdvice;
   L.scorerRows = scorerRows;
   L.sortedBoard = sortedBoard;

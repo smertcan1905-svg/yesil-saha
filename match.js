@@ -92,6 +92,8 @@
         if (phase === 'live') minute.textContent = Math.floor(live.clock || 0) + "'";
         else if (ev) minute.textContent = ev.minute + "'";
       }
+      const bar = document.getElementById('match-progress');
+      if (bar) bar.style.width = Math.min(100, ((live.clock || 0) / 90) * 100) + '%';
       const sub = document.getElementById('match-sub');
       if (!sub) return;
       if (phase === 'live') {
@@ -195,9 +197,10 @@
     function showCard(html, label) {
       phase = 'card';
       const card = cardEl();
+      const go = '<button type="button" class="btn gold card-go" data-act="match-next">' + (label || tx('flow.go', 'Devam')) + '</button>';
       if (card) {
         card.hidden = false;
-        card.innerHTML = html;
+        card.innerHTML = html + go;
         const face = card.querySelector('canvas.face');
         if (face && L.paintFace && state.manager) L.paintFace(face, 'boss', '#14532d');
       }
@@ -234,7 +237,7 @@
           '<p class="eyebrow">' + tx('flow.pre', 'Maç önü') + '</p><h2>' + (me ? labelClub(me, false) : '') + ' – ' + (opp ? labelClub(opp, false) : '') + '</h2>' +
           '<p>' + tx('match.you', 'SEN') + ' · ' + (meta.formation || '') + ' · ' + (meta.stadium || '') + '</p>' +
           '<p class="fine">' + tx('weather.' + (meta.weather || 'clear'), meta.weather || '') + ' · ' + tx('importance.' + (meta.importance || 'league'), meta.importance || '') + ' · ' + (meta.role === 'bench' ? tx('flow.bench', 'Yedek') : tx('flow.xi', 'İlk 11')) + '</p>',
-          tx('flow.kick', 'Maça çık')
+          tx('flow.start', 'Maça başla')
         );
         return;
       }
@@ -484,8 +487,30 @@
         }, time);
         ctx.restore();
       });
-      const bx = 176 + Math.sin(time / 700) * 46;
-      const by = 336 + Math.cos(time / 860) * 28;
+      const span = 820;
+      const step = Math.floor(time / span) % LIVE_XI.length;
+      const nxt = (step + 1) % LIVE_XI.length;
+      const u = (time % span) / span;
+      const ease = u * u * (3 - 2 * u);
+      const from = LIVE_XI[step];
+      const to = LIVE_XI[nxt];
+      const bx = from.x + (to.x - from.x) * ease;
+      const by = from.y + (to.y - from.y) * ease;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 213, 106, 0.85)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(from.x, from.y, 16, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      ctx.restore();
       drawBall(bx, by, ballSpin);
     }
 
@@ -1603,9 +1628,33 @@
         return;
       }
       if (act === 'flow-speed') {
-        live.speed = live.speed === 1 ? 2 : 1;
-        const btn = document.querySelector('[data-act="flow-speed"]');
-        if (btn) btn.textContent = (live.speed || 1) + '×';
+        const cycle = [1, 2, 4];
+        const at = cycle.indexOf(live.speed || 1);
+        live.speed = cycle[(at + 1) % cycle.length];
+        document.querySelectorAll('[data-act="flow-speed"]').forEach(function (btn) {
+          btn.classList.toggle('on', Number(btn.getAttribute('data-mult')) === live.speed);
+        });
+        return;
+      }
+      if (act === 'flow-stats' || act === 'flow-tactics') {
+        const panel = document.getElementById('match-panel');
+        if (!panel) return;
+        const open = panel.hidden || panel.getAttribute('data-kind') !== act;
+        panel.hidden = !open;
+        panel.setAttribute('data-kind', act);
+        if (!open) return;
+        if (act === 'flow-stats') {
+          const stats = live.stats || {};
+          panel.innerHTML = '<p>' + tx('flow.poss', 'Top') + ' ' + (live.possession || 50) + '%</p>' +
+            '<p>' + tx('flow.shots', 'Şut') + ' ' + (stats.shots || 0) + ' · ' + (stats.onTarget || 0) + '</p>' +
+            '<p>' + tx('dream.rate', 'Puan') + ' ' + L.rateMatch(stats) + '</p>' +
+            '<p>' + tx('flow.chance', 'Pozisyon kalitesi') + ' ' + (stats.chances || 0) + '</p>';
+        } else {
+          const xi = (state.squad || []).slice(0, 5).map(function (m) {
+            return '<li><b>' + m.name + '</b><span>' + m.pos + ' · ' + m.rel + '</span></li>';
+          }).join('');
+          panel.innerHTML = '<p>' + ((live.meta && live.meta.formation) || '4-3-3') + '</p><ul class="fixtures">' + xi + '</ul>';
+        }
         return;
       }
       if (act === 'flow-skip' && phase === 'live') {

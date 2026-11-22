@@ -1,7 +1,7 @@
 /* Çökme ve analiz. google-services.json yokken sessiz kalır. */
 (function (root) {
   'use strict';
-  const VERSION = '1.7.3';
+  const VERSION = '1.8.1';
 
   function plugin(name) {
     try {

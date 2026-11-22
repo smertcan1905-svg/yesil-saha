@@ -187,7 +187,7 @@
     if (window.YSCloud && window.YSCloud.configured()) {
       window.YSCloud.saveCloud(state).then(function (res) {
         if (res && res.conflict && window.confirm) {
-          const keep = window.confirm('İki kayıt da değişmiş. Bu cihazdaki kalsın mı?');
+          const keep = window.confirm(say('İki kayıt da değişmiş. Bu cihazdaki kalsın mı?'));
           if (keep) window.YSCloud.saveCloud(state, { force: true });
           else if (res.remote) adoptCareer(res.remote);
         }
@@ -496,6 +496,7 @@
       '<button type="button" class="btn ghost" data-act="daily">' + esc(t('hub.daily')) + '</button>' +
       '<button type="button" class="btn ghost" data-act="missions">' + esc(t('hub.missions')) + '</button>' +
       '<button type="button" class="btn ghost" data-act="records">' + esc(t('hub.records')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="lb">' + esc(t('hub.board')) + '</button>' +
       (window.YSAds && window.YSAds.removed() ? '' : '<button type="button" class="btn ghost" data-act="ads">' + esc(t('hub.ads')) + '</button>') +
       '<button type="button" class="btn ghost" data-act="cabinet">' + esc(t('hub.cabinet')) + '</button>' +
       '<button type="button" class="btn ghost" data-act="phone">' + esc(t('hub.family')) + '</button>' +
@@ -1003,6 +1004,44 @@
       '<button type="button" class="btn ghost" data-act="restore-purchases">' + esc(t('ads.restore')) + '</button></div>';
   }
 
+  function pageBoard() {
+    const kind = state.lbKind || 'career';
+    const tabs = ['career', 'goals', 'assists', 'trophies'].map(function (id) {
+      return '<button type="button" data-act="lb-tab" data-kind="' + id + '" class="' + (kind === id ? 'on' : '') + '">' + esc(t('board.' + id)) + '</button>';
+    }).join('');
+    const pack = state.lbPack || { rows: [], offline: false, rank: null };
+    const key = kind === 'career' ? 'careerScore' : kind;
+    const rows = (pack.rows || []).map(function (row, i) {
+      const mine = pack.uid && row.uid === pack.uid;
+      return '<li class="' + (mine ? 'me' : '') + '"><b>' + (i + 1) + '. ' + esc(row.name) + '</b><span>' +
+        (row[key] || 0) + '</span></li>';
+    }).join('');
+    const me = pack.me;
+    const place = pack.rank
+      ? t('board.you', { n: pack.rank })
+      : (me ? t('board.youOut') : t('board.empty'));
+    return '<div class="page">' + topbar(t('board.title')) +
+      '<div class="seg">' + tabs + '</div>' +
+      (pack.offline ? '<p class="fine">' + esc(t('board.offline')) + '</p>' : '') +
+      '<article class="card"><h2>' + esc(place) + '</h2>' +
+      (me ? '<p class="fine">' + esc(t('board.line', { club: me.club || '', g: me.goals || 0, a: me.assists || 0, t: me.trophies || 0 })) + '</p>' : '') +
+      '</article>' +
+      (rows ? '<ul class="fixtures">' + rows + '</ul>' : '<p class="fine">' + esc(t('board.empty')) + '</p>') +
+      '<button type="button" class="btn" data-act="board-load">' + esc(t('board.load')) + '</button></div>';
+  }
+
+  function loadBoard(kind) {
+    state.lbKind = kind || state.lbKind || 'career';
+    if (!Cloud || !Cloud.fetchBoard) { go('lb'); return; }
+    Cloud.fetchBoard(state.lbKind).then(function (pack) {
+      state.lbPack = pack || { rows: [], offline: true };
+      if (view === 'lb') go('lb');
+    }).catch(function () {
+      state.lbPack = { rows: [], offline: true };
+      if (view === 'lb') go('lb');
+    });
+  }
+
   function pageRecords() {
     const rec = L.records ? L.records(state) : { goals: 0, assists: 0, matches: 0, bestRating: 0, promotions: 0 };
     const cloudOn = Cloud && Cloud.configured();
@@ -1172,7 +1211,7 @@
     return '<div class="page">' + topbar(t('hub.window')) +
       '<p class="eyebrow">' + esc(L.txPlus(state.window.label)) + ' · ' + (state.window.days || 0) + '</p>' +
       '<p>' + esc(L.agentAdvice(state)) + '</p>' +
-      (state.clubWantsSale ? '<p class="news">Kulüp seni satmak istiyor.</p>' : '') +
+      (state.clubWantsSale ? '<p class="news">' + esc(t('window.sell')) + '</p>' : '') +
       (state.freeAgent ? '<p class="news">Serbestsin.</p>' : '') +
       '<p class="fine">Serbest kalma ' + L.formatMoney(state.releaseClause || 0) + '</p>' +
       (deal ? '<article class="card"><h3>' + esc(cname(club)) + '</h3><p>' + L.formatMoney(deal.wage) + ' · ' + deal.days + '</p>' +
@@ -1330,6 +1369,7 @@
     if (name === 'missions') return pageMissions();
     if (name === 'barber') return pageBarber();
     if (name === 'records') return pageRecords();
+    if (name === 'lb') return pageBoard();
     if (name === 'ads') return pageAds();
     if (!state) return pageMenu();
     if (name === 'hub') return pageHub();
@@ -1427,10 +1467,10 @@
       const tutor = document.createElement('div');
       tutor.className = 'sheet-back';
       tutor.id = 'tutorial';
-      tutor.innerHTML = '<div class="sheet"><p class="eyebrow">İlk maç</p><h3>Topu sen yönet</h3>' +
-        '<p>Topa basılı tut, kaleye kaydır. Uzun kaydırma sert şuttur. Soldaki altın bölge ideal güçtür. Kaleciden uzak köşeyi dene.</p>' +
-        '<p>Pas pozisyonunda beyaz formaya kaydır ya da üzerine dokun.</p>' +
-        '<button type="button" class="btn gold" data-act="tutorial-ok">Anladım</button></div>';
+      tutor.innerHTML = '<div class="sheet"><p class="eyebrow">' + esc(t('tutor.first')) + '</p><h3>' + esc(t('tutor.hold')) + '</h3>' +
+        '<p>' + esc(t('tutor.shot')) + '</p>' +
+        '<p>' + esc(t('tutor.pass')) + '</p>' +
+        '<button type="button" class="btn gold" data-act="tutorial-ok">' + esc(t('tutor.got')) + '</button></div>';
       root.appendChild(tutor);
     }
     const canvas = root.querySelector('canvas');
@@ -2016,21 +2056,16 @@
       shareRecord();
       return;
     }
+    if (act === 'lb') { go('lb', 'hub'); loadBoard(state.lbKind || 'career'); return; }
+    if (act === 'lb-tab') { loadBoard(btn.dataset.kind || 'career'); return; }
     if (act === 'board-publish') {
       if (!Cloud || !Cloud.configured()) { toast(t('board.soon')); return; }
-      Cloud.publishBoard(L.boardPayload(state)).then(function () { toast(t('board.sent')); }).catch(function () { toast('Bulut hatası.'); });
+      Cloud.publishBoard(L.boardPayload(state)).then(function () { toast(t('board.sent')); loadBoard(state.lbKind); }).catch(function () { toast(t('toast.cloud')); });
       return;
     }
     if (act === 'board-load') {
       if (!Cloud || !Cloud.configured()) { toast(t('board.soon')); return; }
-      Cloud.fetchBoard().then(function (rows) {
-        const box = document.getElementById('board');
-        if (!box) return;
-        if (!rows.length) { box.innerHTML = '<p class="fine">' + esc(t('board.empty')) + '</p>'; return; }
-        box.innerHTML = '<ul class="fixtures">' + rows.map(function (row, i) {
-          return '<li><b>' + (i + 1) + '. ' + esc(row.name || '') + '</b><span>' + row.goals + '</span></li>';
-        }).join('') + '</ul>';
-      }).catch(function () { toast('Bulut hatası.'); });
+      loadBoard(state.lbKind || 'career');
       return;
     }
     if (act === 'result-next') {
@@ -2185,7 +2220,7 @@
         const deal = res.offer;
         if (talk.kind === 'yenileme') {
           L.applyDeal(state, deal);
-          toast('Sözleşme yenilendi. ' + L.formatMoney(deal.wage) + ' / hafta.');
+          toast(t('toast.renew', { n: L.formatMoney(deal.wage) }));
         } else if (state.inboxOffer && state.inboxOffer.id === talk.id) {
           L.applyDeal(state, deal);
           state.inboxOffer = Object.assign({}, state.inboxOffer, deal);

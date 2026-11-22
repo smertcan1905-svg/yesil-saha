@@ -205,7 +205,7 @@
           updated: { integerValue: String(updated) },
           device: { stringValue: deviceId() },
           removeAds: { booleanValue: adsOn() || !!(state && state.removeAds) },
-          version: { stringValue: '1.7.3' },
+          version: { stringValue: '1.8.1' },
         },
       }),
     }).then(function (res) {
@@ -213,7 +213,9 @@
         if (!res.ok) throw new Error((data && data.error && data.error.message) || 'firestore');
         markSync(updated);
         try { if (root.localStorage) root.localStorage.removeItem(QUEUE_KEY); } catch (e) {}
-        return { ok: true, updated: updated };
+        const row = boardFrom(state);
+        const posted = row ? publishBoard(row).catch(function () { return { ok: false }; }) : Promise.resolve({ ok: false });
+        return posted.then(function () { return { ok: true, updated: updated }; });
       });
     });
   }
@@ -281,32 +283,107 @@
   function intField(n) { return { integerValue: String(Math.round(Number(n) || 0)) }; }
   function strField(s) { return { stringValue: String(s == null ? '' : s) }; }
 
+  const BOARD_CACHE = 'yesil-saha-siralama';
+  const BAD_NAME = ['amk', 'aq', 'siktir', 'siker', 'orospu', 'pic ', 'fuck', 'shit', 'bitch', 'kaltak'];
+
+  function cleanName(name) {
+    let s = String(name == null ? '' : name).replace(/\s+/g, ' ').trim();
+    s = s.replace(/[^\p{L}\p{M}0-9 .'-]/gu, '');
+    if (s.length > 16) s = s.slice(0, 16).trim();
+    const low = s.toLowerCase();
+    for (let i = 0; i < BAD_NAME.length; i++) {
+      if (low.indexOf(BAD_NAME[i]) >= 0) return 'Player';
+    }
+    return s || 'Player';
+  }
+
+  function clubLabel(state) {
+    const L = root.YSLogic;
+    const club = L && L.clubById && state && L.clubById(state.clubId);
+    const name = club && club.name ? club.name : (state && state.clubId) || '';
+    return String(name).slice(0, 48);
+  }
+
+  function boardFrom(state) {
+    if (!state || !state.player || !state.history) return null;
+    const list = state.trophies || [];
+    const stars = list.filter(function (row) {
+      return row && (row.name === 'Altın Yıldız Ödülü' || row.name === 'Golden Star Award');
+    }).length;
+    const goals = Math.max(0, state.history.goals || 0);
+    const assists = Math.max(0, state.history.assists || 0);
+    const cups = (state.history.cups || 0) + (state.history.titles || 0);
+    const trophies = Math.max(list.length, cups);
+    return {
+      name: cleanName(state.player.name),
+      club: clubLabel(state),
+      nat: String(state.player.nat || state.country || 'tr').slice(0, 8),
+      age: state.player.age || 16,
+      goals: goals,
+      assists: assists,
+      trophies: trophies,
+      ballonStars: stars,
+      careerScore: goals * 3 + assists * 2 + trophies * 25 + stars * 40,
+      version: '1.8.1',
+      updatedAt: Date.now(),
+    };
+  }
+
+  function boardFields(record) {
+    return {
+      name: strField(cleanName(record.name)),
+      club: strField(String(record.club || '').slice(0, 48)),
+      nat: strField(String(record.nat || 'tr').slice(0, 8)),
+      age: intField(record.age),
+      goals: intField(record.goals),
+      assists: intField(record.assists),
+      trophies: intField(record.trophies),
+      ballonStars: intField(record.ballonStars),
+      careerScore: intField(record.careerScore),
+      version: strField(record.version || '1.8.1'),
+      updatedAt: intField(record.updatedAt || Date.now()),
+    };
+  }
+
+  const BOARD_SORT = { career: 'careerScore', goals: 'goals', assists: 'assists', trophies: 'trophies' };
+
+  function readCache() {
+    try {
+      const raw = root.localStorage && root.localStorage.getItem(BOARD_CACHE);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  function writeCache(pack) {
+    try { if (root.localStorage) root.localStorage.setItem(BOARD_CACHE, JSON.stringify(pack)); } catch (e) {}
+  }
+
   function publishBoard(record) {
     const c = config();
+    const row = record && record.careerScore != null ? record : boardFrom(record);
+    if (!row) return Promise.reject(new Error('unconfigured'));
     if (!c) return Promise.reject(new Error('unconfigured'));
+    if (!online()) {
+      const pack = readCache() || {};
+      pack.queued = row;
+      pack.at = Date.now();
+      writeCache(pack);
+      return Promise.resolve({ ok: true, queued: true });
+    }
+    const mask = ['name', 'club', 'nat', 'age', 'goals', 'assists', 'trophies', 'ballonStars', 'careerScore', 'version', 'updatedAt']
+      .map(function (key) { return 'updateMask.fieldPaths=' + key; }).join('&');
     return ensureUser().then(function (session) {
       const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(c.projectId) +
         '/databases/(default)/documents/leaderboard/' + encodeURIComponent(session.localId) +
-        '?updateMask.fieldPaths=name&updateMask.fieldPaths=goals&updateMask.fieldPaths=assists&updateMask.fieldPaths=matches&updateMask.fieldPaths=club&updateMask.fieldPaths=country&updateMask.fieldPaths=updated&key=' +
-        encodeURIComponent(c.apiKey);
+        '?' + mask + '&key=' + encodeURIComponent(c.apiKey);
       return fetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.idToken },
-        body: JSON.stringify({
-          fields: {
-            name: strField(record.name),
-            goals: intField(record.goals),
-            assists: intField(record.assists),
-            matches: intField(record.matches),
-            club: strField(record.club),
-            country: strField(record.country),
-            updated: intField(Date.now()),
-          },
-        }),
+        body: JSON.stringify({ fields: boardFields(row) }),
       }).then(function (res) {
         return res.json().then(function (data) {
           if (!res.ok) throw new Error((data && data.error && data.error.message) || 'firestore');
-          return { ok: true };
+          return { ok: true, uid: session.localId };
         });
       });
     });
@@ -317,9 +394,40 @@
     return Number(field.integerValue || field.doubleValue || 0);
   }
 
-  function fetchBoard() {
+  function rowFromDoc(doc, uid) {
+    const fields = doc && doc.fields;
+    if (!fields || !fields.name) return null;
+    const id = uid || ((doc.name || '').split('/').pop());
+    return {
+      uid: id,
+      name: fields.name.stringValue,
+      club: fields.club && fields.club.stringValue,
+      nat: fields.nat && fields.nat.stringValue,
+      age: readNum(fields.age),
+      goals: readNum(fields.goals),
+      assists: readNum(fields.assists),
+      trophies: readNum(fields.trophies),
+      ballonStars: readNum(fields.ballonStars),
+      careerScore: readNum(fields.careerScore),
+      version: fields.version && fields.version.stringValue,
+    };
+  }
+
+  function sortKey(kind) { return BOARD_SORT[kind] || 'careerScore'; }
+
+  function fetchBoard(kind) {
     const c = config();
-    if (!c) return Promise.reject(new Error('unconfigured'));
+    const key = sortKey(kind);
+    const cached = readCache();
+    if (!c) return Promise.resolve({ rows: (cached && cached[key]) || [], me: null, offline: true, rank: null });
+    if (!online()) {
+      return Promise.resolve({
+        rows: (cached && cached[key]) || [],
+        me: cached && cached.me,
+        offline: true,
+        rank: cached && cached.ranks ? cached.ranks[key] : null,
+      });
+    }
     return ensureUser().then(function (session) {
       const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(c.projectId) +
         '/databases/(default)/documents:runQuery?key=' + encodeURIComponent(c.apiKey);
@@ -329,8 +437,8 @@
         body: JSON.stringify({
           structuredQuery: {
             from: [{ collectionId: 'leaderboard' }],
-            orderBy: [{ field: { fieldPath: 'goals' }, direction: 'DESCENDING' }],
-            limit: 10,
+            orderBy: [{ field: { fieldPath: key }, direction: 'DESCENDING' }],
+            limit: 100,
           },
         }),
       }).then(function (res) {
@@ -338,20 +446,82 @@
           if (!res.ok) throw new Error((data && data.error && data.error.message) || 'firestore');
           const rows = [];
           (Array.isArray(data) ? data : []).forEach(function (item) {
-            const fields = item.document && item.document.fields;
-            if (!fields) return;
-            rows.push({
-              name: fields.name && fields.name.stringValue,
-              goals: readNum(fields.goals),
-              assists: readNum(fields.assists),
-              club: fields.club && fields.club.stringValue,
-              country: fields.country && fields.country.stringValue,
-            });
+            const row = rowFromDoc(item.document);
+            if (row) rows.push(row);
           });
-          return rows;
+          const listed = rows.find(function (row) { return row.uid === session.localId; }) || null;
+          return ownRow(session, listed).then(function (mine) {
+          const pack = readCache() || {};
+          pack[key] = rows;
+          pack.me = mine || pack.me;
+          pack.at = Date.now();
+          writeCache(pack);
+          return rankOf(session, key, mine).then(function (rank) {
+            pack.ranks = pack.ranks || {};
+            pack.ranks[key] = rank;
+            writeCache(pack);
+            return { rows: rows, me: mine, offline: false, rank: rank, uid: session.localId };
+          });
+          });
         });
       });
+    }).catch(function () {
+      return {
+        rows: (cached && cached[key]) || [],
+        me: cached && cached.me,
+        offline: true,
+        rank: cached && cached.ranks ? cached.ranks[key] : null,
+      };
     });
+  }
+
+  function ownRow(session, listed) {
+    if (listed) return Promise.resolve(listed);
+    const c = config();
+    const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(c.projectId) +
+      '/databases/(default)/documents/leaderboard/' + encodeURIComponent(session.localId) +
+      '?key=' + encodeURIComponent(c.apiKey);
+    return fetch(url, { headers: { Authorization: 'Bearer ' + session.idToken } }).then(function (res) {
+      if (res.status === 404) return null;
+      return res.json().then(function (data) {
+        if (!res.ok) return null;
+        return rowFromDoc(data, session.localId);
+      });
+    }).catch(function () { return null; });
+  }
+
+  function rankOf(session, key, mine) {
+    if (!mine) return Promise.resolve(null);
+    const c = config();
+    const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(c.projectId) +
+      '/databases/(default)/documents:runAggregationQuery?key=' + encodeURIComponent(c.apiKey);
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.idToken },
+      body: JSON.stringify({
+        structuredAggregationQuery: {
+          structuredQuery: {
+            from: [{ collectionId: 'leaderboard' }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath: key },
+                op: 'GREATER_THAN',
+                value: { integerValue: String(mine[key] || 0) },
+              },
+            },
+          },
+          aggregations: [{ alias: 'c', count: {} }],
+        },
+      }),
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) return null;
+        const first = Array.isArray(data) ? data[0] : null;
+        const fields = first && first.result && first.result.aggregateFields;
+        const higher = fields && fields.c ? readNum(fields.c) : 0;
+        return higher + 1;
+      });
+    }).catch(function () { return null; });
   }
 
   function download(code, filename) {
@@ -391,6 +561,8 @@
     flushQueue: flushQueue,
     syncStamp: syncStamp,
     deviceId: deviceId,
+    cleanName: cleanName,
+    boardFrom: boardFrom,
     publishBoard: publishBoard,
     fetchBoard: fetchBoard,
     download: download,

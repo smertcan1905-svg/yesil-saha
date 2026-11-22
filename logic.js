@@ -605,7 +605,7 @@
   function jitter(rng, amount) { return (rng() - 0.5) * amount; }
 
   function buildChance(type, state, rng) {
-    const pool = type === 'pas' || type === 'orta' ? PASSES
+    const pool = type === 'pas' || type === 'orta' || type === 'ara' ? PASSES
       : type === 'frikik' ? FKS
       : type === 'calim' || type === 'birebir' ? CALIM
       : type === 'kafa' || type === 'penalti' || type === 'korner' || type === 'vole' ? KAFA
@@ -676,6 +676,13 @@
       keeper.y = 150;
       if (defenders.length > 1) defenders.length = 1;
     }
+    if (type === 'ara' && teammate) {
+      teammate.y = clamp(teammate.y - 110, 140, 250);
+      teammate.x = clamp(teammate.x, 70, 290);
+    }
+    if (type === 'uzak') {
+      ball.y = clamp(ball.y + 90, 340, 540);
+    }
     const mates = [];
     if (teammate) mates.push(teammate);
     if (teammate && (type === 'sut' || type === 'pas' || type === 'calim' || type === 'orta' || type === 'birebir')) {
@@ -703,22 +710,27 @@
       close: !!tpl.close || ball.y < 310 || type === 'penalti' || type === 'birebir',
       pressure: pressure,
       gkSkill: gkSkill,
-      mateAdvanced: !!(tpl.advanced && teammate && teammate.y < ball.y - 30),
+      mateAdvanced: type === 'ara' || !!(tpl.advanced && teammate && teammate.y < ball.y - 30),
       attacker: type === 'savunma' && defenders[0] ? defenders[0] : null,
     };
   }
 
-  function rollType(pos, rng) {
+  function rollType(pos, rng, role) {
     const x = rng();
-    const rows = pos === 'forvet'
-      ? [['penalti', 0.08], ['kafa', 0.09], ['korner', 0.07], ['vole', 0.06], ['birebir', 0.11], ['calim', 0.1], ['frikik', 0.08], ['pas', 0.09], ['savunma', 0.05], ['orta', 0.06]]
-      : [['penalti', 0.04], ['kafa', 0.05], ['korner', 0.07], ['vole', 0.05], ['birebir', 0.05], ['calim', 0.08], ['frikik', 0.1], ['pas', 0.18], ['savunma', 0.11], ['orta', 0.13]];
+    const who = role || (pos === 'ortasaha' ? 'ortasaha' : 'forvet');
+    const rows = who === 'kanat'
+      ? [['calim', 0.2], ['orta', 0.2], ['korner', 0.08], ['pas', 0.08], ['birebir', 0.07], ['kafa', 0.05], ['penalti', 0.04], ['frikik', 0.04], ['vole', 0.04], ['savunma', 0.04]]
+      : who === 'onnumara'
+        ? [['pas', 0.2], ['ara', 0.16], ['uzak', 0.14], ['frikik', 0.12], ['orta', 0.06], ['calim', 0.05], ['vole', 0.05], ['birebir', 0.04], ['kafa', 0.03], ['savunma', 0.04]]
+        : who === 'ortasaha'
+          ? [['pas', 0.18], ['ara', 0.08], ['savunma', 0.12], ['orta', 0.1], ['frikik', 0.1], ['calim', 0.07], ['kafa', 0.05], ['uzak', 0.06], ['birebir', 0.04], ['penalti', 0.03]]
+          : [['kafa', 0.16], ['birebir', 0.15], ['penalti', 0.09], ['vole', 0.08], ['korner', 0.1], ['sut', 0.12], ['calim', 0.05], ['pas', 0.04], ['orta', 0.03], ['savunma', 0.03]];
     let acc = 0;
     for (let i = 0; i < rows.length; i++) {
       acc += rows[i][1];
       if (x < acc) return rows[i][0];
     }
-    return 'sut';
+    return who === 'onnumara' ? 'uzak' : who === 'kanat' ? 'orta' : 'sut';
   }
 
   function takeMinute(used, rng, min, max) {
@@ -755,7 +767,7 @@
     const events = [];
     const used = {};
     for (let i = 0; i < n; i++) {
-      const type = rollType(state.player.pos, function () { return rngNext(state); });
+      const type = rollType(state.player.pos, function () { return rngNext(state); }, state.player.role);
       const span = Math.floor(74 / n);
       let lo = 6 + i * span;
       let hi = 6 + (i + 1) * span;
@@ -1694,6 +1706,7 @@
     teamGoals: teamGoals,
     rateMatch: rateMatch,
     ratingParts: ratingParts,
+    rollType: rollType,
     previewChance: function (state, type) {
       return buildChance(type || 'sut', state, Math.random);
     },

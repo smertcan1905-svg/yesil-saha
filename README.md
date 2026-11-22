@@ -82,7 +82,7 @@ Müzik ve efektler bu proje için üretildi. Üçüncü taraf parça veya lisans
 
 ## Android uygulaması
 
-Sürüm 1.7.3 (versionCode 12). Bulut kayıt, Crashlytics ve Analytics açık. Paket kimliği ve imza aynı kaldı.
+Sürüm 1.8.1 (versionCode 14). Release reklamları gerçek AdMob kimliği, debug test kimliği kullanır. Paket kimliği ve imza aynı kaldı. Yayıncı: Legendary Games Studio.
 
 Sürüm 1.6 notu: Maç akışı, hoca, aile, menajer, hayal kulübü ve uydurma kupalar.
 

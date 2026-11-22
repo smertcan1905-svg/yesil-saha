@@ -140,7 +140,9 @@
       const them = live.stats.oppGoals;
       const names = {
         sut: 'Şut alanı açılıyor.',
+        uzak: 'Uzaktan şut denenecek.',
         pas: 'Pas hattı aranıyor.',
+        ara: 'Ara pası aranıyor.',
         orta: 'Kanattan orta geliyor.',
         calim: 'Çalım denenecek.',
         kafa: 'Hava topu, kafa vakti.',

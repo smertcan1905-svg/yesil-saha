@@ -196,13 +196,23 @@
   function boardPayload(state) {
     const rec = records(state);
     const club = L.clubById(state.clubId);
+    const list = state.trophies || [];
+    const stars = list.filter(function (row) {
+      return row && (row.name === 'Altın Yıldız Ödülü' || row.name === 'Golden Star Award');
+    }).length;
+    const trophies = Math.max(list.length, (state.history.cups || 0) + (state.history.titles || 0));
     return {
       name: state.player.name,
+      club: club ? club.name : '',
+      nat: state.player.nat || state.country || 'tr',
+      age: state.player.age,
       goals: rec.goals,
       assists: rec.assists,
-      matches: rec.matches,
-      club: club ? club.name : '',
-      country: state.country || 'tr',
+      trophies: trophies,
+      ballonStars: stars,
+      careerScore: rec.goals * 3 + rec.assists * 2 + trophies * 25 + stars * 40,
+      version: '1.8.1',
+      updatedAt: Date.now(),
     };
   }
 

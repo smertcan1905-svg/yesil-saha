@@ -1,5 +1,5 @@
 /* Çevrimdışı önbellek. Ağ varsa taze dosya, yoksa kayıt. */
-const CACHE = 'yesil-saha-v16';
+const CACHE = 'yesil-saha-v18';
 const ASSETS = [
   './',
   './index.html',
@@ -16,7 +16,9 @@ const ASSETS = [
   './firebase-config.js',
   './cloud-save.js',
   './telemetry.js',
+  './ads-mode.js',
   './ads-config.js',
+  './app-ads.txt',
   './ads.js',
   './billing.js',
   './audio.js',

@@ -4,9 +4,36 @@ service cloud.firestore {
     match /users/{userId}/career/{docId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    function boardFields() {
+      return request.resource.data.keys().hasOnly([
+        'name', 'club', 'nat', 'age', 'goals', 'assists', 'trophies',
+        'ballonStars', 'careerScore', 'version', 'updatedAt'
+      ]);
+    }
+
+    function boardShape() {
+      let d = request.resource.data;
+      return boardFields()
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 16
+        && d.club is string && d.club.size() <= 48
+        && d.nat is string && d.nat.size() >= 2 && d.nat.size() <= 8
+        && d.version is string && d.version.size() >= 1 && d.version.size() <= 16
+        && d.age is int && d.age >= 15 && d.age <= 60
+        && d.goals is int && d.goals >= 0 && d.goals <= 5000
+        && d.assists is int && d.assists >= 0 && d.assists <= 5000
+        && d.trophies is int && d.trophies >= 0 && d.trophies <= 400
+        && d.ballonStars is int && d.ballonStars >= 0 && d.ballonStars <= 40
+        && d.careerScore is int && d.careerScore >= 0 && d.careerScore <= 1000000
+        && d.updatedAt is int && d.updatedAt > 0;
+    }
+
     match /leaderboard/{userId} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && boardShape();
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

@@ -1,5 +1,5 @@
 /* Çevrimdışı önbellek. Ağ varsa taze dosya, yoksa kayıt. */
-const CACHE = 'yesil-saha-v8';
+const CACHE = 'yesil-saha-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './leagues.js',
   './extra.js',
   './progress.js',
+  './world.js',
   './i18n.js',
   './crests.js',
   './firebase-config.js',

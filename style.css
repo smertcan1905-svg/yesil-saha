@@ -332,6 +332,7 @@ input {
 .rel-top b.down { color: #ffb4a8; }
 
 .match {
+  position: relative;
   height: 100%;
   min-height: 0;
   display: flex;
@@ -363,6 +364,42 @@ input {
   background: #128a3c;
   max-width: 100%;
   max-height: 100%;
+}
+.match-card {
+  position: absolute;
+  z-index: 5;
+  left: 12px;
+  right: 12px;
+  top: 64px;
+  bottom: 12px;
+  overflow: auto;
+  background: #102216;
+  border: 1px solid rgba(255, 213, 106, 0.25);
+  border-radius: 18px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.match.card-on .pitch-wrap,
+.match.card-on #match-tools,
+.match.card-on .ticker { visibility: hidden; }
+.ticker { min-height: 2.4em; color: var(--muted); font-size: 13px; }
+.ticker p { margin: 0; }
+.match-tools { display: flex; gap: 6px; }
+.match-tools button {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #163222;
+  color: var(--ink);
+  font-weight: 700;
+}
+.boss-row { display: flex; gap: 10px; align-items: center; }
+.euro-night {
+  min-height: 100%;
+  background: radial-gradient(circle at 50% 18%, #166534, #07140d 68%);
 }
 #match-hint {
   margin: 0;

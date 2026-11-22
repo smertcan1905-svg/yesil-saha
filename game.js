@@ -480,8 +480,13 @@
       '<button type="button" class="btn ghost" data-act="records">' + esc(t('hub.records')) + '</button>' +
       (window.YSAds && window.YSAds.removed() ? '' : '<button type="button" class="btn ghost" data-act="ads">' + esc(t('hub.ads')) + '</button>') +
       '<button type="button" class="btn ghost" data-act="cabinet">' + esc(t('hub.cabinet')) + '</button>' +
-      (state.cup && state.cup.alive && state.cup.playedWeek !== state.week ? '<button type="button" class="btn ghost" data-act="cup">' + esc(t('hub.cup')) + '</button>' : '') +
-      (state.europe && state.europe.alive && state.europe.playedWeek !== state.week ? '<button type="button" class="btn ghost" data-act="europe">' + esc(t('hub.europe')) + '</button>' : '') +
+      '<button type="button" class="btn ghost" data-act="phone">' + esc(t('hub.family')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="agent">' + esc(t('hub.agent')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="dream">' + esc(t('hub.dream')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="cups">' + esc(t('hub.cups')) + '</button>' +
+      (L.cupDue && L.cupDue(state) ? '<button type="button" class="btn ghost" data-act="cup-play">' + esc(t('hub.cup')) + '</button>' : '') +
+      (L.europeDue && L.europeDue(state) ? '<button type="button" class="btn ghost" data-act="euro-night">' + esc(t('hub.europe')) + '</button>' : '') +
+      (L.superDue && L.superDue(state) ? '<button type="button" class="btn ghost" data-act="super-play">' + esc(t('cups.super')) + '</button>' : '') +
       (state.milliInvite ? '<button type="button" class="btn ghost" data-act="milli-open">' + esc(t('hub.milli')) + '</button>' : '') +
       '</div>' +
       (state.player.injured ? '<p class="warn">' + esc(t('hub.injured', { n: state.player.injured })) + '</p>' : '') +
@@ -722,6 +727,7 @@
       '<h3 class="section">' + esc(t('life.partner')) + '</h3>' +
       (love
         ? '<div class="card"><div class="rel-top"><span>' + esc(love.name) + '</span><b>' + love.love + '</b></div>' + bar(love.love, 'good') + '</div>' +
+          '<button type="button" class="btn gold" data-act="partner">' + esc(t('partner.talk')) + '</button>' +
           '<button type="button" class="btn" data-act="date">' + esc(t('life.date')) + '</button>' + gifts
         : '<button type="button" class="btn gold" data-act="meet">' + esc(t('life.meet')) + '</button>') +
       '<h3 class="section">' + esc(t('life.sponsor')) + '</h3>' + sponsors +
@@ -773,7 +779,15 @@
       '<div class="match-meta"><strong id="match-minute"></strong> <span id="match-sub"></span></div>' +
       (pen >= 8 ? '<p class="warn tight">' + esc(t('match.tired', { n: pen })) + '</p>' : '') +
       '</div><button type="button" class="iconbtn" data-act="sound">' + (settings.sound ? esc(t('menu.soundShort')) : esc(t('menu.mute'))) + '</button></header>' +
+      '<div id="match-card" class="match-card" hidden></div>' +
       '<div class="pitch-wrap"><canvas id="pitch" aria-label="' + esc(t('match.pitch')) + '"></canvas></div>' +
+      '<div id="match-ticker" class="ticker"></div>' +
+      '<div id="match-tools" class="match-tools">' +
+      '<button type="button" data-act="flow-pause">' + esc(t('flow.pause')) + '</button>' +
+      '<button type="button" data-act="flow-speed">' + esc(t('flow.fast')) + '</button>' +
+      '<button type="button" data-act="flow-skip">' + esc(t('flow.skip')) + '</button>' +
+      '<button type="button" data-act="onetwo" hidden>' + esc(t('flow.onetwo')) + '</button>' +
+      '</div>' +
       '<p id="match-hint">' + esc(t('match.hint')) + '</p>' +
       '<button type="button" id="match-next" class="btn gold" data-act="match-next" hidden>' + esc(t('match.next')) + '</button>' +
       '</div>';
@@ -861,7 +875,7 @@
   }
 
   function pageTutorial() {
-    const steps = ['sut', 'pas', 'calim', 'kafa', 'savunma'];
+    const steps = ['sut', 'pas', 'frikik', 'penalti', 'kafa', 'calim', 'savunma'];
     const step = steps[Math.min(tutorStep, steps.length - 1)];
     return '<div class="page">' + topbar(t('tutor.title')) +
       '<p class="eyebrow" id="tutor-step">' + esc(t('tutor.step', { n: tutorStep + 1 })) + '</p>' +
@@ -949,6 +963,109 @@
       '</div></div>';
   }
 
+  function pagePhone() {
+    L.migrate(state);
+    const mail = L.familyMail(state);
+    const fam = state.family;
+    const log = (fam.log || []).slice(0, 5).map(function (row) {
+      return '<article class="card"><b>' + esc(row.from) + '</b><p>' + esc(row.text) + '</p><p class="fine">' + esc(row.reply) + '</p></article>';
+    }).join('');
+    return '<div class="page">' + topbar(t('phone.title')) +
+      '<div class="boss-row"><canvas class="face" data-kind="mother"></canvas><div><h2>' + esc(fam.mother) + ' · ' + esc(fam.father) + '</h2>' +
+      '<p>' + esc(t('phone.happy', { n: fam.happiness })) + '</p><p class="fine">' + esc(fam.siblings.map(function (s) { return s.name; }).join(', ')) + '</p></div></div>' +
+      '<article class="card"><b>' + esc(mail.from) + '</b><p>' + esc(L.worldText(mail)) + '</p></article>' +
+      '<button type="button" class="btn" data-act="world" data-kind="family" data-id="help">' + esc(t('phone.help')) + '</button>' +
+      '<button type="button" class="btn" data-act="world" data-kind="family" data-id="warm">' + esc(t('phone.warm')) + '</button>' +
+      '<button type="button" class="btn" data-act="world" data-kind="family" data-id="bring">' + esc(t('phone.bring')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="world" data-kind="family" data-id="later">' + esc(t('phone.later')) + '</button>' +
+      log + '</div>';
+  }
+
+  function pagePartner() {
+    L.migrate(state);
+    const scene = L.partnerScene(state);
+    if (!scene) return pageLife();
+    return '<div class="page">' + topbar(t('partner.talk')) +
+      '<div class="boss-row"><canvas class="face" data-kind="partner"></canvas><div><h2>' + esc(state.player.partner.name) + '</h2>' +
+      '<p>' + state.player.partner.love + '</p></div></div>' +
+      '<article class="card"><p>' + esc(L.worldText(scene)) + '</p></article>' +
+      '<button type="button" class="btn gold" data-act="world" data-kind="partner" data-id="date">' + esc(t('life.date')) + '</button>' +
+      '<button type="button" class="btn" data-act="world" data-kind="partner" data-id="promise">' + esc(t('partner.promise')) + '</button>' +
+      '<button type="button" class="btn" data-act="world" data-kind="partner" data-id="move">' + esc(t('partner.move')) + '</button>' +
+      '<button type="button" class="btn" data-act="world" data-kind="partner" data-id="ring">' + esc(t('partner.ring')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="world" data-kind="partner" data-id="cold">' + esc(t('partner.cold')) + '</button>' +
+      '<button type="button" class="btn ghost" data-act="world" data-kind="partner" data-id="break">' + esc(t('partner.break')) + '</button></div>';
+  }
+
+  function pageAgent() {
+    L.migrate(state);
+    const scene = L.agentScene(state);
+    const list = (L.AGENTS || []).map(function (a) {
+      const on = state.agent && state.agent.id === a.id;
+      return '<article class="card"><h3>' + esc(a.name) + '</h3><p>' + esc(L.worldText(a)) + ' · %' + a.cut + '</p>' +
+        '<button type="button" class="btn tiny" data-act="world" data-kind="hire" data-id="' + a.id + '"' + (on ? ' disabled' : '') + '>' + esc(t('agent.hire')) + '</button></article>';
+    }).join('');
+    return '<div class="page">' + topbar(t('agent.title')) +
+      '<div class="boss-row"><canvas class="face" data-kind="agent"></canvas><div><h2>' + esc(state.agent ? state.agent.name : t('agent.title')) + '</h2></div></div>' +
+      (scene ? '<article class="card"><p>' + esc(L.worldText(scene)) + '</p></article>' +
+        '<button type="button" class="btn gold" data-act="world" data-kind="agent" data-id="push">' + esc(t('agent.push')) + '</button>' +
+        '<button type="button" class="btn" data-act="world" data-kind="agent" data-id="sponsor">' + esc(t('agent.brand')) + '</button>' +
+        '<button type="button" class="btn" data-act="world" data-kind="agent" data-id="wait">' + esc(t('agent.wait')) + '</button>' +
+        '<button type="button" class="btn ghost" data-act="world" data-kind="fire">' + esc(t('agent.fire')) + '</button>' : '') +
+      list + '</div>';
+  }
+
+  function pageDream() {
+    L.migrate(state);
+    const view = L.dreamView(state);
+    const countries = Object.keys(L.COUNTRIES || {}).map(function (id) {
+      const info = L.countryInfo(id);
+      return '<button type="button" class="btn tiny' + (view.country === id ? ' gold' : '') + '" data-act="dream-country" data-country="' + id + '">' + esc(countryLabel(id)) + '</button>';
+    }).join('');
+    const clubs = view.clubs.map(function (c) {
+      const on = state.dream && state.dream.clubId === c.id;
+      return '<button type="button" class="btn" data-act="world" data-kind="dream" data-id="' + c.id + '">' + crest(c) + ' ' + esc(cname(c)) + (on ? ' ✓' : '') + '</button>';
+    }).join('');
+    const tgt = view.targets || { goals: 0, rating: 0, caps: 0 };
+    return '<div class="page">' + topbar(t('dream.title')) +
+      (view.signed ? '<p class="news">' + esc(t('dream.signed')) + '</p>' : '') +
+      (view.dream ? '<article class="card"><h3>' + esc(cname(view.dream)) + '</h3><p>' + esc(view.gap) + '</p></article>' : '') +
+      '<div class="statgrid"><div class="stat"><b>' + view.goals + '/' + tgt.goals + '</b><span>' + esc(t('dream.goals')) + '</span></div>' +
+      '<div class="stat"><b>' + comma(view.rate) + '/' + tgt.rating + '</b><span>' + esc(t('dream.rate')) + '</span></div>' +
+      '<div class="stat"><b>' + view.caps + '/' + tgt.caps + '</b><span>' + esc(t('dream.caps')) + '</span></div></div>' +
+      '<div class="action-grid">' + countries + '</div>' + clubs + '</div>';
+  }
+
+  function pageCups() {
+    L.migrate(state);
+    const board = L.cupBracket(state);
+    const rows = board.rows.map(function (row) {
+      return '<li class="' + (row.now ? 'me' : '') + '"><b>' + esc(row.name) + '</b><span>' + (row.done ? '✓' : row.now ? '•' : '') + '</span></li>';
+    }).join('');
+    const euro = L.euroView(state);
+    const euroBlock = euro
+      ? '<h3 class="section">' + esc(euro.title) + '</h3><p class="fine">' + euro.pts + ' pts · ' + euro.gp + '</p>' +
+        euro.rivals.map(function (r) { return '<p class="fine">' + esc(r.name) + ' · ' + r.pts + '</p>'; }).join('')
+      : '';
+    return '<div class="page">' + topbar(t('cups.title')) +
+      '<h2>' + esc(board.title) + '</h2><ul class="fixtures">' + rows + '</ul>' +
+      (L.cupDue(state) ? '<button type="button" class="btn gold" data-act="cup-play">' + esc(t('cups.play')) + '</button>' : '') +
+      euroBlock +
+      (L.europeDue(state) ? '<button type="button" class="btn gold" data-act="euro-night">' + esc(t('cups.euro')) + '</button>' : '') +
+      (L.superDue(state) ? '<button type="button" class="btn" data-act="super-play">' + esc(t('cups.super')) + '</button>' : '') +
+      '</div>';
+  }
+
+  function pageEuroNight() {
+    L.migrate(state);
+    const euro = L.euroView(state);
+    return '<div class="page euro-night">' +
+      '<p class="eyebrow">' + esc(t('euro.title')) + '</p>' +
+      '<h1>' + esc(euro ? euro.title : t('hub.europe')) + '</h1>' +
+      '<p class="helptext">' + esc(t('euro.body')) + '</p>' +
+      '<button type="button" class="btn gold big" data-act="europe-kick">' + esc(t('euro.go')) + '</button></div>';
+  }
+
   function htmlFor(name) {
     if (name === 'menu') return pageMenu();
     if (name === 'create') return pageCreate();
@@ -976,6 +1093,12 @@
     if (name === 'pazarlik') return pagePazarlik();
     if (name === 'casino') return pageCasino();
     if (name === 'life') return pageLife();
+    if (name === 'phone') return pagePhone();
+    if (name === 'partner') return pagePartner();
+    if (name === 'agent') return pageAgent();
+    if (name === 'dream') return pageDream();
+    if (name === 'cups') return pageCups();
+    if (name === 'euro-night') return pageEuroNight();
     if (name === 'cabinet') return pageCabinet();
     if (name === 'milli') return pageMilli();
     return pageMenu();
@@ -1003,6 +1126,9 @@
     if (tutorTimer) { cancelAnimationFrame(tutorTimer); tutorTimer = 0; }
     root.innerHTML = htmlFor(view);
     paintLook(view === 'barber' && state ? state.player.look : (draftLook || (L.defaultLook && L.defaultLook())));
+    root.querySelectorAll('canvas.face').forEach(function (cv) {
+      if (L.paintFace) L.paintFace(cv, cv.getAttribute('data-kind'), '#15803d');
+    });
     if (view === 'ogretici') startTutor();
     if (window.YSAds) {
       if (view === 'menu') window.YSAds.showBanner();
@@ -1099,7 +1225,7 @@
     const canvas = document.getElementById('tutor-pitch');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const steps = ['sut', 'pas', 'calim', 'kafa', 'savunma'];
+    const steps = ['sut', 'pas', 'frikik', 'penalti', 'kafa', 'calim', 'savunma'];
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = 360 * dpr;
     canvas.height = 220 * dpr;
@@ -1168,6 +1294,7 @@
       else if (dist > 26) {
         if (step === 'sut') ok = dy < -22 && Math.abs(dy) > Math.abs(dx) * 0.8;
         if (step === 'pas') ok = dx > 20 && dy > -60;
+        if (step === 'frikik' || step === 'penalti') ok = dy < -18;
         if (step === 'calim') ok = Math.abs(dx) > 22 && Math.abs(dx) > Math.abs(dy);
         if (step === 'savunma') ok = dy > 20;
       }
@@ -1592,8 +1719,39 @@
     if (act === 'casino') { go('casino', 'hub'); return; }
     if (act === 'cabinet') { go('cabinet', 'hub'); return; }
     if (act === 'milli-open') { go('milli', 'hub'); return; }
-    if (act === 'cup' || act === 'europe' || act === 'milli-play') {
-      const kind = act === 'cup' ? 'kupa' : act === 'europe' ? 'avrupa' : 'milli';
+    if (act === 'phone') { go('phone', 'hub'); return; }
+    if (act === 'partner') { go('partner', 'life'); return; }
+    if (act === 'agent') { go('agent', 'hub'); return; }
+    if (act === 'dream') { go('dream', 'hub'); return; }
+    if (act === 'cups') { go('cups', 'hub'); return; }
+    if (act === 'euro-night') { go('euro-night', 'cups'); return; }
+    if (act === 'dream-country') {
+      state.dreamBrowse = btn.dataset.country;
+      go('dream');
+      return;
+    }
+    if (act === 'world') {
+      const kind = btn.dataset.kind;
+      const id = btn.dataset.id;
+      let res = { ok: false, message: '' };
+      if (kind === 'family') res = L.familyChoose(state, id);
+      else if (kind === 'partner') res = L.partnerChoose(state, id);
+      else if (kind === 'hire') res = L.hireAgent(state, id);
+      else if (kind === 'fire') res = L.fireAgent(state);
+      else if (kind === 'agent') res = L.agentChoose(state, id);
+      else if (kind === 'dream') res = L.setDream(state, id);
+      save();
+      if (res && res.message) toast(say(res.message));
+      if (kind === 'partner' && !state.player.partner) go('life');
+      else go(view);
+      return;
+    }
+    if (act === 'flow-pause' || act === 'flow-speed' || act === 'flow-skip' || act === 'onetwo' || act === 'story-choice') {
+      if (matchView && matchView.control) matchView.control(act, btn.dataset.choice);
+      return;
+    }
+    if (act === 'cup-play' || act === 'europe-kick' || act === 'super-play' || act === 'cup' || act === 'europe' || act === 'milli-play') {
+      const kind = act === 'cup-play' || act === 'cup' ? 'kupa' : act === 'super-play' ? 'shield' : act === 'milli-play' ? 'milli' : 'avrupa';
       const res = L.beginSpecial(state, kind);
       if (!res.ok) { toast(res.message); return; }
       save();

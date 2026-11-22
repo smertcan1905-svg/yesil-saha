@@ -463,7 +463,7 @@
     state.player.sponsor = null;
     state.milli = { caps: 0, goals: 0 };
     state.milliInvite = null;
-    state.cup = { alive: true, round: 0, name: tier >= 3 ? 'İlçe Kupası' : tier === 2 ? 'Anadolu Kupası' : 'Ulusal Kupa', playedWeek: 0 };
+    state.cup = { alive: true, round: 0, name: 'Anadolu Kupası', nameEn: 'Anatolia Cup', playedWeek: 0 };
     state.europe = tier === 1 ? { alive: true, round: 0, playedWeek: 0 } : null;
     const pool = clubsIn('tr', tier);
     const club = pool[Math.floor(rngNext(state) * pool.length)];
@@ -607,8 +607,8 @@
   function buildChance(type, state, rng) {
     const pool = type === 'pas' || type === 'orta' ? PASSES
       : type === 'frikik' ? FKS
-      : type === 'calim' ? CALIM
-      : type === 'kafa' || type === 'penalti' ? KAFA
+      : type === 'calim' || type === 'birebir' ? CALIM
+      : type === 'kafa' || type === 'penalti' || type === 'korner' || type === 'vole' ? KAFA
       : type === 'savunma' ? SAVUNMA
       : SHOTS;
     const tpl = pool[Math.floor(rng() * pool.length)];
@@ -651,15 +651,56 @@
     let pressure = { 1: 16, 2: 11, 3: 6, 4: 2 }[state.tier] || 4;
     if (fix && fix.home) pressure = Math.max(0, pressure - 2);
     const gkSkill = clamp(fix && fix.opp ? fix.opp.strength * 0.94 : 55, 32, 93);
+    if (type === 'frikik') {
+      let guard = 0;
+      while (wall.length < 4 && guard < 4) {
+        const last = wall[wall.length - 1] || { x: 168, y: 208 };
+        wall.push({ x: clamp(last.x + 26, 48, 312), y: last.y + (guard % 2 ? 6 : -4) });
+        guard += 1;
+      }
+      if (rng() < 0.45 && wall.length < 5) wall.push({ x: clamp(wall[0].x - 28, 40, 300), y: wall[0].y });
+    }
+    if (type === 'penalti') {
+      ball.x = 180;
+      ball.y = 248;
+      keeper.x = 180;
+      keeper.y = GOAL.y + 16;
+      wall.length = 0;
+      defenders.length = 0;
+    }
+    if (type === 'korner') {
+      ball.x = 42;
+      ball.y = 170;
+    }
+    if (type === 'birebir') {
+      keeper.y = 150;
+      if (defenders.length > 1) defenders.length = 1;
+    }
+    const mates = [];
+    if (teammate) mates.push(teammate);
+    if (teammate && (type === 'sut' || type === 'pas' || type === 'calim' || type === 'orta' || type === 'birebir')) {
+      mates.push({
+        x: clamp(340 - teammate.x, 36, 324),
+        y: clamp(teammate.y + 34, 160, 520),
+      });
+    }
+    const control = type === 'frikik' ? 'fk'
+      : type === 'penalti' ? 'pen'
+      : (type === 'kafa' || type === 'korner') ? 'header'
+      : type === 'vole' ? 'volley'
+      : type === 'savunma' ? 'defend'
+      : 'open';
     return {
       type: type,
+      control: control,
       ball: ball,
       goal: goal,
       keeper: keeper,
       defenders: defenders,
       wall: wall,
       teammate: teammate,
-      close: !!tpl.close || ball.y < 310,
+      mates: mates,
+      close: !!tpl.close || ball.y < 310 || type === 'penalti' || type === 'birebir',
       pressure: pressure,
       gkSkill: gkSkill,
       mateAdvanced: !!(tpl.advanced && teammate && teammate.y < ball.y - 30),
@@ -670,8 +711,8 @@
   function rollType(pos, rng) {
     const x = rng();
     const rows = pos === 'forvet'
-      ? [['penalti', 0.05], ['kafa', 0.12], ['orta', 0.08], ['calim', 0.14], ['frikik', 0.1], ['pas', 0.16], ['savunma', 0.1]]
-      : [['penalti', 0.03], ['kafa', 0.07], ['orta', 0.14], ['calim', 0.12], ['frikik', 0.08], ['pas', 0.2], ['savunma', 0.14]];
+      ? [['penalti', 0.08], ['kafa', 0.09], ['korner', 0.07], ['vole', 0.06], ['birebir', 0.11], ['calim', 0.1], ['frikik', 0.08], ['pas', 0.09], ['savunma', 0.05], ['orta', 0.06]]
+      : [['penalti', 0.04], ['kafa', 0.05], ['korner', 0.07], ['vole', 0.05], ['birebir', 0.05], ['calim', 0.08], ['frikik', 0.1], ['pas', 0.18], ['savunma', 0.11], ['orta', 0.13]];
     let acc = 0;
     for (let i = 0; i < rows.length; i++) {
       acc += rows[i][1];
@@ -703,32 +744,46 @@
     if (!fix) return null;
     const attrsNow = matchAttrs(state);
     const avg = (attrsNow.hiz + attrsNow.guc + attrsNow.teknik + attrsNow.vizyon + attrsNow.frikik) / 5;
-    let n = 4;
-    if (avg >= 70) n += 1;
-    if (rngNext(state) < 0.42) n += 1;
-    if (rngNext(state) < 0.22 && n < 6) n += 1;
-    if (state.player.energy < 22 && n > 3) n -= 1;
-    n = clamp(n, 3, 6);
+    let n = 5;
+    if (avg >= 64) n += 1;
+    if (avg >= 78) n += 1;
+    if (state.player.pos === 'forvet' && rngNext(state) < 0.55) n += 1;
+    if (state.player.energy < 24 && n > 5) n -= 1;
+    if (state.player.rel && state.player.rel.hoca < 36 && n > 5) n -= 1;
+    n = clamp(n, 5, 8);
+    const bench = !!(state.player.rel && state.player.rel.hoca < 36);
     const events = [];
     const used = {};
     for (let i = 0; i < n; i++) {
       const type = rollType(state.player.pos, function () { return rngNext(state); });
-      const span = Math.floor(76 / n);
-      const minute = takeMinute(used, function () { return rngNext(state); }, 8 + i * span, 8 + (i + 1) * span);
+      const span = Math.floor(74 / n);
+      let lo = 6 + i * span;
+      let hi = 6 + (i + 1) * span;
+      if (bench) { lo = Math.max(lo, 56); hi = Math.max(hi, lo + 4); }
+      const minute = takeMinute(used, function () { return rngNext(state); }, lo, Math.min(88, hi));
       events.push({
         type: 'chance',
         minute: minute,
         scene: buildChance(type, state, function () { return rngNext(state); }),
       });
     }
-    const oppN = Math.min(4, poisson(oppLambda(state), function () { return rngNext(state); }));
+    const oppN = Math.min(3, poisson(oppLambda(state), function () { return rngNext(state); }));
     for (let i = 0; i < oppN; i++) {
-      events.push({ type: 'opp', minute: takeMinute(used, function () { return rngNext(state); }, 12, 86) });
+      events.push({ type: 'opp', key: 'flow.opp', minute: takeMinute(used, function () { return rngNext(state); }, 10, 86) });
     }
-    if (state.player.rel.takim >= 52 && rngNext(state) < 0.16) {
-      events.push({ type: 'solo', minute: takeMinute(used, function () { return rngNext(state); }, 20, 80) });
+    const mateLam = clamp(0.28 + Math.max(0, avg - 48) / 80, 0.2, 1.35);
+    const mateN = Math.min(2, poisson(mateLam, function () { return rngNext(state); }));
+    for (let i = 0; i < mateN; i++) {
+      events.push({ type: 'solo', key: 'flow.solo', minute: takeMinute(used, function () { return rngNext(state); }, 14, 84) });
+    }
+    const notes = ['flow.foul', 'flow.save', 'flow.card', 'flow.sub', 'flow.wide'];
+    for (let i = 0; i < notes.length; i++) {
+      events.push({ type: 'note', key: notes[i], minute: takeMinute(used, function () { return rngNext(state); }, 4 + i * 15, 18 + i * 15) });
     }
     events.sort(function (a, b) { return a.minute - b.minute || (a.type === 'chance' ? -1 : 1); });
+    const expect = state.player.pos === 'forvet'
+      ? 'score'
+      : (rngNext(state) < 0.5 ? 'track' : 'create');
     state.live = {
       oppId: fix.oppId,
       home: fix.home,
@@ -738,6 +793,18 @@
       attrs: attrsNow,
       tiredPen: energyPenalty(state),
       stats: emptyStats(state.player.pos, energyPenalty(state) > 0),
+      stage: 'pre',
+      clock: 0,
+      speed: 1,
+      paused: false,
+      didHalf: false,
+      stoppage: 1 + Math.floor(rngNext(state) * 3),
+      expect: expect,
+      bench: bench,
+      meta: matchMeta(state, fix),
+      ticker: [],
+      scorers: [],
+      possession: 48 + Math.round(avg / 10),
     };
     state.phase = 'match';
     return state.live;
@@ -829,6 +896,10 @@
     if (scene.type === 'penalti') {
       finalX = m.aimX + error * 0.55;
     }
+    if (swipe.curve) finalX += swipe.curve;
+    if (swipe.chip && m.power > 76) {
+      return { outcome: 'over', power: m.power, aimX: finalX, onTarget: false, band: 'over' };
+    }
     const onTarget = finalX >= m.left && finalX <= m.right;
     if (scene.type === 'frikik' && scene.wall && scene.wall.length && m.band !== 'weak') {
       const lift = 64 - attrs.guc * 0.14 - attrs.frikik * 0.1;
@@ -854,6 +925,7 @@
     saveP -= Math.max(0, m.accStat - 58) / 340;
     if (m.band === 'ideal') saveP -= 0.03;
     if (scene.close) saveP -= 0.05;
+    if (swipe.chip && scene.close) saveP -= 0.1;
     saveP = clamp(saveP, 0.2, 0.93);
     if (rng() < saveP) return { outcome: 'save', power: m.power, aimX: finalX, onTarget: true, band: m.band };
     return { outcome: 'goal', power: m.power, aimX: finalX, onTarget: true, band: m.band };
@@ -944,20 +1016,78 @@
     return (stats.goals || 0) + (stats.assists || 0) + (stats.soloGoals || 0);
   }
 
+  function ratingParts(stats) {
+    const pos = (stats && stats.pos) || 'forvet';
+    const parts = [
+      { id: 'base', n: 6 },
+      { id: 'goals', n: (stats.goals || 0) * (pos === 'forvet' ? 1.15 : 0.95) },
+      { id: 'assists', n: (stats.assists || 0) * (pos === 'ortasaha' ? 0.95 : 0.75) },
+      { id: 'passes', n: (stats.passesOk || 0) * 0.22 },
+      { id: 'target', n: (stats.onTarget || 0) * 0.1 },
+      { id: 'miss', n: -((stats.bigMiss || 0) * 0.28) },
+      { id: 'turn', n: -((stats.turnovers || 0) * 0.16) },
+      { id: 'self', n: -((stats.selfish || 0) * 0.12) },
+    ];
+    if (stats.result === 'win') parts.push({ id: 'res', n: 0.35 });
+    else if (stats.result === 'loss') parts.push({ id: 'res', n: -0.4 });
+    if (stats.tired) parts.push({ id: 'tired', n: -0.35 });
+    return parts;
+  }
+
   function rateMatch(stats) {
-    let r = 6;
-    const pos = stats.pos || 'forvet';
-    r += (stats.goals || 0) * (pos === 'forvet' ? 1.15 : 0.95);
-    r += (stats.assists || 0) * (pos === 'ortasaha' ? 0.95 : 0.75);
-    r += (stats.passesOk || 0) * 0.22;
-    r += (stats.onTarget || 0) * 0.1;
-    r -= (stats.bigMiss || 0) * 0.28;
-    r -= (stats.turnovers || 0) * 0.16;
-    r -= (stats.selfish || 0) * 0.12;
-    if (stats.result === 'win') r += 0.35;
-    else if (stats.result === 'loss') r -= 0.4;
-    if (stats.tired) r -= 0.35;
+    let r = 0;
+    ratingParts(stats || {}).forEach(function (part) { r += part.n; });
     return clamp(Math.round(r * 10) / 10, 1, 10);
+  }
+
+  const XI_FIRST = ['Ege', 'Kerem', 'Deniz', 'Baran', 'Emre', 'Aras', 'Mert', 'Can', 'Ozan', 'Berk', 'Umut', 'Alp', 'Serkan', 'Tarık', 'Levent', 'Bora'];
+  const XI_LAST = ['Demir', 'Acar', 'Yüce', 'Solmaz', 'Bektaş', 'Duru', 'Sezgin', 'Karaca', 'Aladağ', 'Uslu'];
+
+  function fakePlayer(rng, pos) {
+    const a = XI_FIRST[Math.floor(rng() * XI_FIRST.length)];
+    const b = XI_LAST[Math.floor(rng() * XI_LAST.length)];
+    return { name: a + ' ' + b, pos: pos };
+  }
+
+  function matchMeta(state, fix) {
+    const weathers = ['clear', 'cloud', 'rain', 'wind'];
+    const weather = weathers[Math.floor(rngNext(state) * weathers.length)];
+    const club = clubById(state.clubId);
+    const opp = fix && fix.opp;
+    const city = club && club.name ? String(club.name).split(' ')[0] : 'Saha';
+    const oppCity = opp && opp.name ? String(opp.name).split(' ')[0] : '';
+    const derby = !!(club && opp && city && city === oppCity);
+    const cup = state.cup && state.cup.round >= 3;
+    const importance = derby ? 'derby' : cup ? 'final' : (state.week >= (state.rounds.length || 7)) ? 'title' : 'league';
+    const pos = state.player.pos === 'ortasaha' ? 'ortasaha' : 'forvet';
+    const shape = pos === 'forvet'
+      ? ['KL', 'SB', 'STP', 'STP', 'SB', 'OS', 'OS', 'OS', 'KLN', 'FOR', 'FOR']
+      : ['KL', 'SB', 'STP', 'STP', 'SB', 'OS', 'OS', 'OS', 'OS', 'KLN', 'FOR'];
+    const slot = pos === 'forvet' ? 10 : 6;
+    const xi = shape.map(function (role, index) {
+      if (index === slot) return { name: state.player.name, pos: role, me: true };
+      return fakePlayer(function () { return rngNext(state); }, role);
+    });
+    const away = shape.map(function (role) {
+      return fakePlayer(function () { return rngNext(state); }, role);
+    });
+    const us = userStrength(state);
+    const them = opp ? opp.strength : 55;
+    let odds = 'even';
+    if (us > them + 8) odds = 'us';
+    else if (them > us + 8) odds = 'them';
+    return {
+      weather: weather,
+      stadium: city + ' Stadı',
+      derby: derby,
+      importance: importance,
+      formation: pos === 'forvet' ? '4-3-3' : '4-2-3-1',
+      xi: xi,
+      away: away,
+      odds: odds,
+      captain: isCaptain(state),
+      role: state.player.rel && state.player.rel.hoca < 36 ? 'bench' : 'start',
+    };
   }
 
   function bumpRel(state, key, delta) {
@@ -1120,10 +1250,10 @@
     }
     let award = '';
     if (state.seasonGoals >= 6) {
-      award = 'Gol kralı';
+      award = 'Gol Kralı Ödülü';
       state.player.rel.taraftar = clamp(state.player.rel.taraftar + 6, 0, 100);
     } else if (state.seasonAssists >= 5) {
-      award = 'Asist kralı';
+      award = 'Asist Ödülü';
       state.player.rel.takim = clamp(state.player.rel.takim + 4, 0, 100);
     }
     state.history.seasons += 1;
@@ -1131,12 +1261,12 @@
     state.seasonHistory = state.seasonHistory || [];
     const seasonAvg = average(state.seasonRatings);
     if (seasonAvg >= 7.8 && rank <= 3) {
-      award = award ? award + ' · Yılın oyuncusu' : 'Yılın oyuncusu';
-      state.trophies.push({ name: 'Yılın oyuncusu', season: state.season });
+      award = award ? award + ' · Yılın Oyuncusu' : 'Yılın Oyuncusu';
+      state.trophies.push({ name: 'Yılın Oyuncusu', season: state.season });
       state.history.playerAwards = (state.history.playerAwards || 0) + 1;
     }
     if (champion) state.trophies.push({ name: tierName(tierBefore) + ' şampiyonluğu', season: state.season });
-    if (state.seasonGoals >= 6) state.trophies.push({ name: 'Gol krallığı', season: state.season });
+    if (state.seasonGoals >= 6) state.trophies.push({ name: 'Gol Kralı Ödülü', season: state.season });
     state.seasonHistory.push({
       season: state.season,
       clubId: state.clubId,
@@ -1243,7 +1373,9 @@
     if (!fix) return { ok: false, message: 'Fikstür bulunamadı.' };
     const us = teamGoals(report);
     const them = report.oppGoals || 0;
-    const result = us > them ? 'win' : us < them ? 'loss' : 'draw';
+    let result = us > them ? 'win' : us < them ? 'loss' : 'draw';
+    if (report.shootout === 'win') result = 'win';
+    else if (report.shootout === 'loss') result = 'loss';
     const rating = rateMatch({
       goals: report.goals || 0,
       assists: report.assists || 0,
@@ -1329,7 +1461,9 @@
           if (bucket.round >= 4) {
             bucket.alive = false;
             state.trophies = state.trophies || [];
-            const cupName = comp === 'kupa' ? (state.cup.name || 'Kupa') : 'Kıta Kupası';
+            const cupName = comp === 'kupa'
+              ? ((state.cup && state.cup.name) || 'Anadolu Kupası')
+              : ((state.europe && state.europe.name) || 'Elmas Kupa');
             state.trophies.push({ name: cupName, season: state.season });
             state.history.cups = (state.history.cups || 0) + 1;
             addNews(state, cupName + ' senin!');
@@ -1441,11 +1575,7 @@
     state.live = null;
     state.player.energy = clamp(Math.max(state.player.energy, 80), 0, 100);
     const home = state.country || 'tr';
-    if (home === 'tr') {
-      state.cup = { alive: true, round: 0, name: state.tier >= 3 ? 'İlçe Kupası' : state.tier === 2 ? 'Anadolu Kupası' : 'Ulusal Kupa', playedWeek: 0 };
-    } else {
-      state.cup = { alive: true, round: 0, name: 'Ulusal Kupa', playedWeek: 0 };
-    }
+    state.cup = { alive: true, round: 0, name: 'Anadolu Kupası', nameEn: 'Anatolia Cup', playedWeek: 0 };
     state.europe = state.tier === 1 ? { alive: true, round: 0, playedWeek: 0 } : null;
     setupSeason(state);
     noteClub(state);
@@ -1563,6 +1693,10 @@
     applyEvent: applyEvent,
     teamGoals: teamGoals,
     rateMatch: rateMatch,
+    ratingParts: ratingParts,
+    previewChance: function (state, type) {
+      return buildChance(type || 'sut', state, Math.random);
+    },
     tableSorted: tableSorted,
     completeMatch: completeMatch,
     continueResult: continueResult,

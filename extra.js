@@ -38,7 +38,7 @@
     if (!state.seasonHistory) state.seasonHistory = [];
     if (!state.milli) state.milli = { caps: 0, goals: 0 };
     if (state.milliInvite === undefined) state.milliInvite = null;
-    if (!state.cup) state.cup = { alive: true, round: 0, name: 'İlçe Kupası', playedWeek: 0 };
+    if (!state.cup) state.cup = { alive: true, round: 0, name: 'Anadolu Kupası', nameEn: 'Anatolia Cup', playedWeek: 0 };
     if (state.europe === undefined) state.europe = state.tier === 1 ? { alive: true, round: 0, playedWeek: 0 } : null;
     if (!state.country) {
       const known = L.clubById(state.clubId);
@@ -346,6 +346,48 @@
   }
   L.resolveHeader = resolveHeader;
 
+  function resolvePenalty(scene, swipe, composure, attrs, rng) {
+    const dx = swipe.x2 - swipe.x1;
+    const dy = swipe.y2 - swipe.y1;
+    const dist = Math.hypot(dx, dy);
+    const power = L.clamp(dist / L.POWER_SCALE, 0, 100);
+    const wobble = (1 - L.clamp(composure == null ? 0.5 : composure, 0, 1)) * 42 * (rng() - 0.5);
+    const mouth = scene.goal.y + scene.goal.h;
+    let aimX = scene.goal.x + scene.goal.w / 2;
+    if (dy < -8) {
+      const t = (mouth - scene.ball.y) / dy;
+      aimX = scene.ball.x + dx * t;
+    }
+    aimX += wobble;
+    const left = scene.goal.x + 8;
+    const right = scene.goal.x + scene.goal.w - 8;
+    if (power < 20) return { outcome: 'weak', aimX: aimX, onTarget: true, power: power };
+    if (power > 94) return { outcome: 'over', aimX: aimX, onTarget: false, power: power };
+    if (aimX < left || aimX > right) return { outcome: 'wide', aimX: aimX, onTarget: false, power: power };
+    const dive = rng() < 0.5 ? left + 12 : right - 12;
+    const close = Math.abs(dive - aimX) < 20;
+    const saveP = close ? 0.62 : 0.18;
+    if (rng() < saveP) return { outcome: 'save', aimX: aimX, onTarget: true, power: power };
+    return { outcome: 'goal', aimX: aimX, onTarget: true, power: power };
+  }
+  L.resolvePenalty = resolvePenalty;
+
+  function resolveOneTwo(scene, attrs, rng, pos) {
+    if (!scene.teammate) return { outcome: 'scuff' };
+    const swipe = L.tapPassSwipe(scene);
+    const res = L.resolvePass(scene, swipe, attrs, rng, pos || 'ortasaha');
+    if (res.outcome === 'pass' || res.outcome === 'assist') return { outcome: 'return', pass: res.outcome };
+    return { outcome: res.outcome || 'cut', pass: res.outcome };
+  }
+  L.resolveOneTwo = resolveOneTwo;
+
+  function resolveVolley(scene, accuracy, attrs, rng) {
+    const res = resolveHeader(scene, accuracy, attrs, rng);
+    if (accuracy < 0.55 && res.outcome === 'goal' && rng() < 0.45) return { outcome: 'wide', aimX: res.aimX, onTarget: false };
+    return res;
+  }
+  L.resolveVolley = resolveVolley;
+
   const origApply = L.applyChance;
   L.applyChance = function (stats, kind, outcome) {
     if (kind === 'dribble') {
@@ -398,7 +440,7 @@
     const live = L.createMatch(state);
     if (!live) return { ok: false, message: 'Maç kurulamadı.' };
     live.competition = kind;
-    live.compName = kind === 'milli' ? 'Milli maç' : kind === 'avrupa' ? 'Kıta Kupası' : (state.cup && state.cup.name) || 'Kupa';
+    live.compName = kind === 'milli' ? 'Uluslar Turnuvası' : kind === 'avrupa' ? ((state.europe && state.europe.name) || 'Elmas Kupa') : (state.cup && state.cup.name) || 'Anadolu Kupası';
     const pool = L.continentalClubs ? L.continentalClubs(state) : (L.FOREIGN || []);
     if (kind === 'avrupa' && pool.length) {
       const pick = pool[Math.abs((state.season * 5 + state.week) | 0) % pool.length];
@@ -406,7 +448,7 @@
       live.oppColor = pick.color;
       live.oppSecond = pick.second;
     } else if (kind === 'milli') {
-      live.displayOpp = 'Kıyı Milli';
+      live.displayOpp = 'Kıyı Birliği';
       live.oppColor = '#b91c1c';
     } else {
       live.displayOpp = 'Kupa Rakibi';
@@ -423,7 +465,7 @@
     const form = L.average(state.form || []);
     if (!state.form || state.form.length < 3 || form < 7.25) return null;
     if ((state.tier || 4) > 2 && form < 7.6) return null;
-    state.milliInvite = { foe: 'Kıyı Milli' };
+    state.milliInvite = { foe: 'Kıyı Birliği' };
     return state.milliInvite;
   }
   L.maybeMilli = maybeMilli;

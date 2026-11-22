@@ -88,7 +88,10 @@
       }
       const ev = live.events[Math.min(live.cursor, Math.max(0, live.events.length - 1))];
       const minute = document.getElementById('match-minute');
-      if (minute && ev) minute.textContent = ev.minute + "'";
+      if (minute) {
+        if (phase === 'live') minute.textContent = Math.floor(live.clock || 0) + "'";
+        else if (ev) minute.textContent = ev.minute + "'";
+      }
       const sub = document.getElementById('match-sub');
       if (!sub) return;
       if (ev && ev.type === 'chance') {
@@ -107,7 +110,8 @@
         : 'Beyaz formaya kaydır veya üzerine dokun.';
       if (scene.type === 'frikik') return 'Frikik virajlı gider. Direğin dışından kaydır, frikik içeri büker.';
       if (scene.type === 'calim') return 'Savunmacının yanından kaydır. Üstüne değil, çevresinden.';
-      if (scene.type === 'kafa') return 'Çubuk yeşil bölgedeyken dokun.';
+      if (scene.type === 'kafa' || scene.control === 'header' || scene.type === 'korner') return 'Çubuk yeşil bölgedeyken dokun. Kaydırma kafanın yönüdür.';
+      if (scene.control === 'volley' || scene.type === 'vole') return 'Top inince, çubuk yeşildeyken dokun.';
       if (scene.type === 'penalti') return 'Penaltı. Kalecinin ters köşesine kaydır.';
       if (scene.type === 'savunma') return 'Top kap. Koşan rakibe doğru kaydır.';
       return 'Topa bas, kaleye kaydır. Altın bölge ideal güç.';
@@ -172,6 +176,263 @@
         x: L.clamp(scene.ball.x + (vx / len) * 30, 28, L.LOG_W - 28),
         y: L.clamp(scene.ball.y + (vy / len) * 30, 80, L.LOG_H - 24),
       };
+    }
+
+    function cardEl() { return document.getElementById('match-card'); }
+    function toolsEl() { return document.getElementById('match-tools'); }
+
+    function hideCard() {
+      const card = cardEl();
+      if (card) { card.hidden = true; card.innerHTML = ''; }
+      const root = document.querySelector('.match');
+      if (root) root.classList.remove('card-on');
+    }
+
+    function showCard(html, label) {
+      phase = 'card';
+      const card = cardEl();
+      if (card) {
+        card.hidden = false;
+        card.innerHTML = html;
+        const face = card.querySelector('canvas.face');
+        if (face && L.paintFace && state.manager) L.paintFace(face, 'boss', '#14532d');
+      }
+      const root = document.querySelector('.match');
+      if (root) root.classList.add('card-on');
+      setNext(true, label || tx('flow.go', 'Devam'));
+      const tools = toolsEl();
+      if (tools) tools.hidden = true;
+    }
+
+    function choiceRow() {
+      return '<button type="button" class="btn" data-act="story-choice" data-choice="humble">' + tx('choice.humble', 'Alçakgönüllü') + '</button>' +
+        '<button type="button" class="btn" data-act="story-choice" data-choice="confident">' + tx('choice.confident', 'Kendinden emin') + '</button>' +
+        '<button type="button" class="btn ghost" data-act="story-choice" data-choice="arrogant">' + tx('choice.arrogant', 'Kibirli') + '</button>' +
+        '<button type="button" class="btn ghost" data-act="story-choice" data-choice="minutes">' + tx('choice.minutes', 'Dakika iste') + '</button>';
+    }
+
+    function pressRow() {
+      return '<button type="button" class="btn" data-act="story-choice" data-choice="calm">' + tx('choice.calm', 'Sakin cevap') + '</button>' +
+        '<button type="button" class="btn" data-act="story-choice" data-choice="us">' + tx('choice.us', 'Takımı öv') + '</button>' +
+        '<button type="button" class="btn ghost" data-act="story-choice" data-choice="trash">' + tx('choice.trash', 'Rakibi kızdır') + '</button>' +
+        '<button type="button" class="btn ghost" data-act="story-choice" data-choice="brand">' + tx('choice.brand', 'Markaya oyna') + '</button>';
+    }
+
+    function showStage(stage) {
+      const live = state.live;
+      if (!live) return;
+      live.stage = stage;
+      if (stage === 'pre' && live.meta && L.bossCard) {
+        const meta = live.meta;
+        const opp = L.clubById(live.oppId);
+        const me = L.clubById(state.clubId);
+        showCard(
+          '<p class="eyebrow">' + tx('flow.pre', 'Maç önü') + '</p><h2>' + (me ? labelClub(me, false) : '') + ' – ' + (opp ? labelClub(opp, false) : '') + '</h2>' +
+          '<p>' + tx('match.you', 'SEN') + ' · ' + (meta.formation || '') + ' · ' + (meta.stadium || '') + '</p>' +
+          '<p class="fine">' + tx('weather.' + (meta.weather || 'clear'), meta.weather || '') + ' · ' + tx('importance.' + (meta.importance || 'league'), meta.importance || '') + ' · ' + (meta.role === 'bench' ? tx('flow.bench', 'Yedek') : tx('flow.xi', 'İlk 11')) + '</p>',
+          tx('flow.kick', 'Maça çık')
+        );
+        return;
+      }
+      if ((stage === 'talk' || stage === 'htalk' || stage === 'post') && L.bossCard) {
+        const when = stage === 'htalk' ? 'half' : stage === 'post' ? 'post' : 'pre';
+        const card = L.bossCard(state, when);
+        showCard('<p class="eyebrow">' + tx('flow.talk', 'Hoca') + '</p><div class="boss-row"><canvas class="face"></canvas><div><h2>' + card.title + '</h2><p>' + card.rel + '</p></div></div><p>' + card.body + '</p>' + choiceRow());
+        return;
+      }
+      if ((stage === 'press' || stage === 'flash') && L.pressCard) {
+        const card = L.pressCard(state, stage === 'flash' ? 'post' : 'pre');
+        showCard('<p class="eyebrow">' + tx('flow.press', 'Basın') + '</p><p>' + card.body + '</p>' + pressRow());
+        return;
+      }
+      if (stage === 'half') {
+        const stats = live.stats || {};
+        showCard('<p class="eyebrow">' + tx('flow.half', 'Devre') + '</p><h2>' + L.teamGoals(stats) + ' – ' + (stats.oppGoals || 0) + '</h2><p>' + tx('dream.rate', 'Puan') + ' ' + L.rateMatch(stats) + '</p>', tx('flow.go', 'Devam'));
+        return;
+      }
+      if (stage === 'full') {
+        const stats = live.stats || {};
+        const bits = (L.ratingParts ? L.ratingParts(Object.assign({ result: L.teamGoals(stats) === (stats.oppGoals || 0) ? 'draw' : L.teamGoals(stats) > (stats.oppGoals || 0) ? 'win' : 'loss', pos: state.player.pos }, stats)) : []).map(function (p) {
+          return '<li><b>' + p.id + '</b><span>' + (Math.round(p.n * 10) / 10) + '</span></li>';
+        }).join('');
+        showCard('<p class="eyebrow">' + tx('flow.full', 'Maç sonu') + '</p><h2>' + L.teamGoals(stats) + ' – ' + (stats.oppGoals || 0) + '</h2><ul class="fixtures">' + bits + '</ul>', tx('flow.go', 'Devam'));
+        return;
+      }
+      if (stage === 'office' && L.officeCard) {
+        if (!live.officeKind && L.maybeOffice) live.officeKind = L.maybeOffice(state);
+        const card = L.officeCard(state);
+        showCard('<p class="eyebrow">' + tx('flow.office', 'Ofis') + '</p><p>' + card.body + '</p>' + choiceRow());
+        return;
+      }
+      phase = 'live';
+      hideCard();
+      setNext(false);
+      const tools = toolsEl();
+      if (tools) tools.hidden = false;
+      const tick = document.getElementById('match-ticker');
+      if (tick && live.ticker && live.ticker.length) {
+        tick.innerHTML = live.ticker.slice(0, 3).map(function (row) {
+          return '<p>' + row.m + "' " + row.text + '</p>';
+        }).join('');
+      }
+      updateHud();
+    }
+
+    function pushTick(minute, text) {
+      const live = state.live;
+      if (!live.ticker) live.ticker = [];
+      live.ticker.unshift({ m: Math.floor(minute), text: text });
+      if (live.ticker.length > 8) live.ticker.pop();
+      const el = document.getElementById('match-ticker');
+      if (!el) return;
+      el.innerHTML = live.ticker.slice(0, 3).map(function (row) {
+        return '<p>' + row.m + "' " + row.text + '</p>';
+      }).join('');
+    }
+
+    function armAim(ev) {
+      phase = 'aim';
+      pending = null;
+      flight = null;
+      kickAnim = 0;
+      mateKick = 0;
+      diveAmt = 0;
+      shownScene = ev.scene;
+      ball = { x: ev.scene.ball.x, y: ev.scene.ball.y };
+      keeperX = ev.scene.keeper.x;
+      keeperTarget = ev.scene.keeper.x;
+      userPos = placeUser(ev.scene);
+      hint(chanceHint(ev.scene));
+      setNext(false);
+      const one = document.querySelector('[data-act="onetwo"]');
+      if (one) one.hidden = !(ev.scene && ev.scene.teammate && (ev.scene.control === 'open' || !ev.scene.control));
+      const tools = toolsEl();
+      if (tools) tools.hidden = false;
+      updateHud();
+    }
+
+    function pump() {
+      const live = state.live;
+      if (!live || phase !== 'live' || live.paused) return;
+      while (live.cursor < live.events.length) {
+        const ev = live.events[live.cursor];
+        if (ev.minute > live.clock + 0.05) break;
+        if (ev.type === 'chance') {
+          live.stage = 'moment';
+          armAim(ev);
+          return;
+        }
+        if (ev.type === 'opp' || ev.type === 'solo') {
+          L.applyEvent(live.stats, ev.type);
+          const text = tx(ev.key || (ev.type === 'opp' ? 'flow.opp' : 'flow.solo'), ev.type === 'opp' ? 'Rakip golü' : 'Takım golü');
+          if (!live.scorers) live.scorers = [];
+          live.scorers.push({ minute: ev.minute, text: text });
+          pushTick(ev.minute, text);
+          sfx(ev.type === 'opp' ? 'miss' : 'goal');
+        } else {
+          pushTick(ev.minute, tx(ev.key || 'flow.foul', 'Oyun sürüyor.'));
+        }
+        live.cursor += 1;
+        updateHud();
+      }
+      const endAt = 90 + (live.stoppage || 1);
+      if (!live.didHalf && live.clock >= 45 && phase === 'live') {
+        live.didHalf = true;
+        live.clock = 45;
+        showStage('half');
+        return;
+      }
+      if (live.clock >= endAt && phase === 'live' && live.cursor >= live.events.length) {
+        showStage('full');
+      }
+    }
+
+    function advanceStage() {
+      const live = state.live;
+      if (!live) return;
+      const stage = live.stage;
+      if ((stage === 'talk' || stage === 'htalk' || stage === 'post' || stage === 'press' || stage === 'flash' || stage === 'office') && !live.picked && L.applyCard) {
+        L.applyCard(state, stage, null);
+      }
+      live.picked = false;
+      if (stage === 'pre') { showStage('talk'); return; }
+      if (stage === 'talk') { showStage('press'); return; }
+      if (stage === 'press' || stage === 'htalk') {
+        live.stage = 'live';
+        phase = 'live';
+        if (live.didHalf && live.clock < 45.2) live.clock = 45.2;
+        hideCard();
+        const tools = toolsEl();
+        if (tools) tools.hidden = false;
+        setNext(false);
+        sfx('whistle');
+        updateHud();
+        return;
+      }
+      if (stage === 'half') { showStage('htalk'); return; }
+      if (stage === 'full') {
+        const level = L.teamGoals(live.stats) === (live.stats.oppGoals || 0);
+        const knock = live.competition === 'kupa' || live.competition === 'avrupa' || live.competition === 'milli';
+        if (level && knock && !live.shootoutDone && L.previewChance) {
+          live.shootoutDone = true;
+          live.shootKicks = 0;
+          const scene = L.previewChance(state, 'penalti');
+          live.events.push({ type: 'chance', minute: 121, scene: scene });
+          live.cursor = live.events.length - 1;
+          hideCard();
+          setNext(false);
+          armAim(live.events[live.cursor]);
+          hint(tx('flow.shootout', 'Penaltı atışları'));
+          return;
+        }
+        showStage('post');
+        return;
+      }
+      if (stage === 'post') { showStage('flash'); return; }
+      if (stage === 'flash') {
+        const office = L.maybeOffice && L.maybeOffice(state);
+        if (office) { live.officeKind = office; showStage('office'); return; }
+        finish();
+        return;
+      }
+      if (stage === 'office') { finish(); return; }
+      live.stage = 'live';
+      phase = 'live';
+      hideCard();
+    }
+
+    function bootFlow() {
+      const live = state.live;
+      if (!live) return;
+      if (!live.stage) live.stage = 'pre';
+      if (live.stage === 'live' || live.stage === 'moment') {
+        phase = 'live';
+        hideCard();
+        if (live.stage === 'moment') enter();
+        else pump();
+        return;
+      }
+      showStage(live.stage);
+    }
+
+    function drawLive(time) {
+      if (cache.width) ctx.drawImage(cache, 0, 0, L.LOG_W, L.LOG_H);
+      const t = time / 1000;
+      const me = L.clubById(state.clubId);
+      const mine = me ? me.color : '#15803d';
+      const foe = (state.live && state.live.oppColor) || '#b91c1c';
+      for (let i = 0; i < 10; i++) {
+        const home = i < 5;
+        const x = 40 + (i % 5) * 64 + Math.sin(t + i) * 8;
+        const y = (home ? 360 : 180) + Math.cos(t * 0.8 + i) * 18;
+        ctx.fillStyle = home ? mine : foe;
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const bx = 180 + Math.sin(t * 1.4) * 70;
+      const by = 280 + Math.cos(t * 1.1) * 80;
+      drawBall(bx, by, ballSpin);
     }
 
     function enter() {
@@ -239,13 +500,34 @@
     }
 
     function advance() {
-      if (dead || phase !== 'banner' || !state.live) return;
+      if (dead || !state.live) return;
+      if (phase === 'card') { advanceStage(); return; }
+      if (phase !== 'banner') return;
       clearAuto();
       state.live.waiting = null;
       state.live.cursor += 1;
       pending = null;
+      if (state.live.shootoutDone) {
+        state.live.shootKicks = (state.live.shootKicks || 0) + 1;
+        if (Math.random() < 0.45) state.live.stats.oppGoals += 1;
+        if (state.live.shootKicks < 3) {
+          const scene = L.previewChance(state, 'penalti');
+          state.live.events.push({ type: 'chance', minute: 121 + state.live.shootKicks, scene: scene });
+          state.live.cursor = state.live.events.length - 1;
+          armAim(state.live.events[state.live.cursor]);
+          return;
+        }
+        const us = L.teamGoals(state.live.stats);
+        const them = state.live.stats.oppGoals || 0;
+        state.live.stats.shootout = us >= them ? 'win' : 'loss';
+        showStage('post');
+        return;
+      }
+      state.live.stage = 'live';
+      phase = 'live';
+      hideCard();
       if (hooks.onSave) hooks.onSave();
-      enter();
+      pump();
     }
 
     function endPoint(scene, outcome, aimX) {
@@ -346,8 +628,21 @@
       if (!ev || !ev.scene || phase !== 'aim') return;
       const scene = ev.scene;
       const attrs = state.live.attrs;
-      if (scene.type === 'kafa' && L.resolveHeader) {
-        const outcome = L.resolveHeader(scene, headerAcc(), attrs, Math.random);
+      if ((scene.control === 'pen' || scene.type === 'penalti') && L.resolvePenalty) {
+        const composure = L.clamp(((attrs.teknik || 40) + (attrs.vizyon || 40)) / 200, 0, 1);
+        const outcome = L.resolvePenalty(scene, swipe, composure, attrs, Math.random);
+        pending = { kind: 'shot', outcome: outcome.outcome, aimX: outcome.aimX || scene.ball.x, applied: false };
+        keeperTarget = outcome.aimX || scene.keeper.x;
+        diveDir = Math.sign((outcome.aimX || scene.keeper.x) - scene.keeper.x) || 1;
+        kickAnim = 1;
+        sfx('kick');
+        buzz(12);
+        startFlight(endPoint(scene, outcome.outcome, pending.aimX), commitOutcome);
+        return;
+      }
+      if ((scene.control === 'header' || scene.control === 'volley' || scene.type === 'kafa' || scene.type === 'korner' || scene.type === 'vole') && (L.resolveHeader || L.resolveVolley)) {
+        const fn = (scene.control === 'volley' || scene.type === 'vole') && L.resolveVolley ? L.resolveVolley : L.resolveHeader;
+        const outcome = fn(scene, headerAcc(), attrs, Math.random);
         pending = { kind: 'header', outcome: outcome.outcome, aimX: outcome.aimX || scene.ball.x, applied: false };
         kickAnim = 1;
         sfx('kick');
@@ -438,7 +733,7 @@
       if (e.cancelable) e.preventDefault();
       const p = toLogical(e);
       const near = Math.hypot(p.x - ev.scene.ball.x, p.y - ev.scene.ball.y) < 60;
-      drag = { x: p.x, y: p.y, ox: p.x, oy: p.y, near: near, pid: e.pointerId };
+      drag = { x: p.x, y: p.y, ox: p.x, oy: p.y, bx: ev.scene.ball.x, by: ev.scene.ball.y, near: near, pid: e.pointerId };
       try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     }
 
@@ -451,6 +746,17 @@
       if (phase !== 'aim' || !drag.near) return;
       const ev = currentEvent();
       if (!ev || !ev.scene) return;
+      if ((ev.scene.control === 'open' || !ev.scene.control) && ev.scene.type !== 'frikik' && ev.scene.type !== 'penalti') {
+        ev.scene.ball.x = L.clamp(ev.scene.ball.x + (p.x - ev.scene.ball.x) * 0.28, 30, L.LOG_W - 30);
+        ev.scene.ball.y = L.clamp(ev.scene.ball.y + (p.y - ev.scene.ball.y) * 0.28, 130, L.LOG_H - 28);
+        ball.x = ev.scene.ball.x;
+        ball.y = ev.scene.ball.y;
+        userPos = placeUser(ev.scene);
+        (ev.scene.defenders || []).forEach(function (d) {
+          d.x += (ev.scene.ball.x - d.x) * 0.06;
+          d.y += (ev.scene.ball.y - d.y) * 0.06;
+        });
+      }
       const swipe = { x1: ev.scene.ball.x, y1: ev.scene.ball.y, x2: p.x, y2: p.y };
       const info = L.classifyAction(ev.scene, swipe);
       if (info.kind === 'pass') hint('Pas yönü. Bırakınca top gider.');
@@ -475,7 +781,7 @@
       const ev = currentEvent();
       if (!ev || !ev.scene) return;
       const moved = Math.hypot(p.x - start.ox, p.y - start.oy);
-      if (ev.scene.type === 'kafa') {
+      if (ev.scene.type === 'kafa' || ev.scene.control === 'header' || ev.scene.control === 'volley' || ev.scene.type === 'korner' || ev.scene.type === 'vole') {
         beginKick({ x1: ev.scene.ball.x, y1: ev.scene.ball.y, x2: p.x, y2: p.y });
         return;
       }
@@ -492,7 +798,15 @@
         hint('Önce topa yakın bas.');
         return;
       }
-      beginKick({ x1: ev.scene.ball.x, y1: ev.scene.ball.y, x2: p.x, y2: p.y });
+      const chip = (p.y - start.oy) > 8 && moved < 96 && (ev.scene.control === 'open' || ev.scene.type === 'sut' || ev.scene.type === 'frikik');
+      beginKick({
+        x1: start.bx || ev.scene.ball.x,
+        y1: start.by || ev.scene.ball.y,
+        x2: p.x,
+        y2: p.y,
+        curve: (p.x - start.ox) * 0.12,
+        chip: chip,
+      });
     }
 
     function burst(x, y) {
@@ -514,6 +828,12 @@
       flash = Math.max(0, flash - dt * 1.4);
       celebrateT = Math.max(0, celebrateT - dt);
       ballSpin += dt * (phase === 'fly' ? 9 : 1.4);
+      if (phase === 'live' && state.live && !state.live.paused) {
+        const sp = (state.live.speed || 1) * speed();
+        state.live.clock += dt * 1.15 * sp;
+        pump();
+        updateHud();
+      }
       if (phase === 'aim') headerPhase += dt * 3.1;
       const shooting = phase === 'fly' && pending && pending.kind !== 'pass';
       const wantDive = shooting ? 1 : 0;
@@ -973,6 +1293,11 @@
       ctx.clearRect(0, 0, L.LOG_W, L.LOG_H);
       if (cache.width) ctx.drawImage(cache, 0, 0, L.LOG_W, L.LOG_H);
       ctx.save();
+      if (phase === 'live') {
+        drawLive(time);
+        ctx.restore();
+        return;
+      }
       if (shake > 0) ctx.translate(Math.sin(time / 18) * 5 * shake, 0);
       const scene = ev && ev.type === 'chance' ? ev.scene : null;
       const running = phase === 'fly';
@@ -1026,7 +1351,7 @@
         ctx.font = '700 10px Segoe UI, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(tx('match.you', 'SEN'), userPos.x, userPos.y + 26);
-        if (phase === 'aim' && scene.type === 'kafa') {
+        if (phase === 'aim' && (scene.type === 'kafa' || scene.control === 'header' || scene.control === 'volley' || scene.type === 'korner' || scene.type === 'vole')) {
           const t = (Math.sin(headerPhase) + 1) / 2;
           ctx.save();
           ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -1183,8 +1508,7 @@
       canvas.addEventListener('pointermove', onMove, { passive: false });
       canvas.addEventListener('pointerup', onUp, { passive: false });
       canvas.addEventListener('pointercancel', onUp, { passive: false });
-      sfx('whistle');
-      enter();
+      bootFlow();
       raf = requestAnimationFrame(function (t) {
         fit();
         frame(t);
@@ -1205,6 +1529,62 @@
     };
 
     this.continue = advance;
+    this.control = function (act, choice) {
+      const live = state.live;
+      if (!live) return;
+      if (act === 'story-choice') {
+        if (L.applyCard) L.applyCard(state, live.stage, choice);
+        live.picked = true;
+        advanceStage();
+        return;
+      }
+      if (act === 'flow-pause') {
+        live.paused = !live.paused;
+        const btn = document.querySelector('[data-act="flow-pause"]');
+        if (btn) btn.textContent = live.paused ? tx('flow.play', 'Sürdür') : tx('flow.pause', 'Dur');
+        return;
+      }
+      if (act === 'flow-speed') {
+        live.speed = live.speed === 1 ? 2 : 1;
+        const btn = document.querySelector('[data-act="flow-speed"]');
+        if (btn) btn.textContent = (live.speed || 1) + '×';
+        return;
+      }
+      if (act === 'flow-skip' && phase === 'live') {
+        let next = null;
+        for (let i = live.cursor; i < live.events.length; i++) {
+          if (live.events[i].type === 'chance') { next = live.events[i]; break; }
+        }
+        if (next) live.clock = Math.max(live.clock, next.minute - 0.01);
+        pump();
+        return;
+      }
+      if (act === 'onetwo' && phase === 'aim' && L.resolveOneTwo) {
+        const ev = currentEvent();
+        if (!ev || !ev.scene) return;
+        const res = L.resolveOneTwo(ev.scene, live.attrs, Math.random, state.player.pos);
+        if (res.outcome === 'return') {
+          L.applyChance(live.stats, 'pass', 'pass');
+          ev.scene.ball.y = Math.max(190, ev.scene.ball.y - 70);
+          ball = { x: ev.scene.ball.x, y: ev.scene.ball.y };
+          userPos = placeUser(ev.scene);
+          hint(tx('flow.onetwo', 'Ver-kaç'));
+          sfx('pass');
+        } else {
+          pending = { kind: 'pass', outcome: res.outcome || 'cut', aimX: ev.scene.ball.x, applied: false };
+          startFlight(endPoint(ev.scene, pending.outcome, ev.scene.ball.x), commitOutcome);
+        }
+      }
+    };
+    this.reshow = function () { if (state.live) showStage(state.live.stage); };
+    this.preview = function (type) {
+      if (!state.live || !L.previewChance) return;
+      const scene = L.previewChance(state, type);
+      const ev = { type: 'chance', minute: Math.max(12, Math.floor(state.live.clock || 12)), scene: scene };
+      state.live.events[state.live.cursor] = ev;
+      hideCard();
+      armAim(ev);
+    };
     this.getScene = function () {
       const ev = currentEvent();
       return ev && ev.scene ? ev.scene : null;

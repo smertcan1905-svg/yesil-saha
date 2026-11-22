@@ -1,7 +1,7 @@
 /* Çökme ve analiz. google-services.json yokken sessiz kalır. */
 (function (root) {
   'use strict';
-  const VERSION = '1.7.1';
+  const VERSION = '1.7.3';
 
   function plugin(name) {
     try {
@@ -31,16 +31,36 @@
     }
   }
 
+  function webAnalytics() {
+    const c = root.FIREBASE_CONFIG;
+    if (!c || !c.measurementId || typeof document === 'undefined') return;
+    if (root.Capacitor && root.Capacitor.isNativePlatform && root.Capacitor.isNativePlatform()) return;
+    if (root.__ysGtag) return;
+    root.__ysGtag = true;
+    root.dataLayer = root.dataLayer || [];
+    root.gtag = function () { root.dataLayer.push(arguments); };
+    root.gtag('js', new Date());
+    root.gtag('config', c.measurementId, { anonymize_ip: true, send_page_view: false });
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(c.measurementId);
+    document.head.appendChild(script);
+  }
+
   function logEvent(name, params) {
     const tool = analytics();
-    if (!tool || !tool.logEvent) return;
-    const job = tool.logEvent({ name: name, params: params || {} });
-    if (job && job.catch) job.catch(function () {});
+    if (tool && tool.logEvent) {
+      const job = tool.logEvent({ name: name, params: params || {} });
+      if (job && job.catch) job.catch(function () {});
+      return;
+    }
+    if (typeof root.gtag === 'function') root.gtag('event', name, params || {});
   }
 
   function install() {
     if (root.__ysTelemetry) return;
     root.__ysTelemetry = true;
+    webAnalytics();
     if (typeof root.addEventListener !== 'function') return;
     root.addEventListener('error', function (event) {
       record(event && event.error ? event.error : (event && event.message), false);

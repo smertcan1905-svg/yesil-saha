@@ -341,7 +341,7 @@ input {
   padding: 8px 12px 12px;
   overflow: hidden;
 }
-.match-hud, #match-hint, #match-next { flex-shrink: 0; }
+.match-hud, #match-hint, #match-next, .match-tools, .ticker { flex-shrink: 0; }
 .match-hud {
   background: rgba(0, 0, 0, 0.28);
   border-radius: 14px;
@@ -413,8 +413,19 @@ input {
   border-radius: 14px;
   padding: 10px 12px;
 }
-.ticker { min-height: 2.4em; color: var(--muted); font-size: 13px; }
+.ticker {
+  min-height: 3.5em;
+  max-height: 4.8em;
+  overflow: hidden;
+  color: #e7f6ea;
+  font-size: 13px;
+  line-height: 1.35;
+  background: rgba(0, 0, 0, 0.38);
+  border-radius: 12px;
+  padding: 6px 10px;
+}
 .ticker p { margin: 0; }
+.ticker p + p { color: var(--muted); }
 .match-tools { display: flex; gap: 6px; }
 .match-tools button {
   flex: 1;

@@ -1803,7 +1803,12 @@
     }
     if (act === 'cloud-save') {
       if (!Cloud || !Cloud.configured() || !state) { toast('Bulut kapalı.'); return; }
-      Cloud.saveCloud(state).then(function () { toast('Buluta yazıldı.'); }).catch(function () { toast('Bulut hatası.'); });
+      Cloud.saveCloud(state).then(function (res) {
+        if (res && res.queued) { toast('Ağ yok. Kayıt kuyrukta.'); return; }
+        if (res && res.conflict) { toast('Bulutta daha yeni bir kayıt var.'); return; }
+        toast('Buluta yazıldı.');
+        if (view === 'settings') go('settings');
+      }).catch(function () { toast('Bulut hatası.'); });
       return;
     }
     if (act === 'cloud-load') {

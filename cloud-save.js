@@ -205,7 +205,7 @@
           updated: { integerValue: String(updated) },
           device: { stringValue: deviceId() },
           removeAds: { booleanValue: adsOn() || !!(state && state.removeAds) },
-          version: { stringValue: '1.7.1' },
+          version: { stringValue: '1.7.3' },
         },
       }),
     }).then(function (res) {

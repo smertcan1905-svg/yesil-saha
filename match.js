@@ -89,13 +89,23 @@
       const ev = live.events[Math.min(live.cursor, Math.max(0, live.events.length - 1))];
       const minute = document.getElementById('match-minute');
       if (minute) {
-        if (phase === 'live') minute.textContent = Math.floor(live.clock || 0) + "'";
+        if (live.stage === 'half' || live.stage === 'htalk') minute.textContent = "45'";
+        else if (live.stage === 'full' || live.stage === 'post' || live.stage === 'flash') minute.textContent = "90'";
+        else if (phase === 'live') minute.textContent = Math.floor(live.clock || 0) + "'";
         else if (ev) minute.textContent = ev.minute + "'";
       }
       const bar = document.getElementById('match-progress');
       if (bar) bar.style.width = Math.min(100, ((live.clock || 0) / 90) * 100) + '%';
       const sub = document.getElementById('match-sub');
       if (!sub) return;
+      if (live.stage === 'half' || live.stage === 'htalk') {
+        sub.textContent = tx('flow.half', 'Devre arası');
+        return;
+      }
+      if (live.stage === 'full' || live.stage === 'post' || live.stage === 'flash') {
+        sub.textContent = tx('flow.full', 'Maç sonu');
+        return;
+      }
       if (phase === 'live') {
         sub.textContent = live.compName ? tr(live.compName) : tx('flow.live', 'Oyun sürüyor.');
         return;
@@ -255,6 +265,7 @@
       if (stage === 'half') {
         const stats = live.stats || {};
         showCard('<p class="eyebrow">' + tx('flow.half', 'Devre') + '</p><h2>' + L.teamGoals(stats) + ' – ' + (stats.oppGoals || 0) + '</h2><p>' + tx('dream.rate', 'Puan') + ' ' + L.rateMatch(stats) + '</p>', tx('flow.go', 'Devam'));
+        updateHud();
         return;
       }
       if (stage === 'full') {
@@ -265,6 +276,7 @@
         const motm = L.pickMotm ? L.pickMotm(state) : null;
         const motmLine = motm ? '<p class="news">' + tx('flow.motm', 'Maçın adamı') + ': ' + motm.name + ' · ' + motm.rating + '</p>' : '';
         showCard('<p class="eyebrow">' + tx('flow.full', 'Maç sonu') + '</p><h2>' + L.teamGoals(stats) + ' – ' + (stats.oppGoals || 0) + '</h2>' + motmLine + '<ul class="fixtures">' + bits + '</ul>', tx('flow.go', 'Devam'));
+        updateHud();
         return;
       }
       if (stage === 'office' && L.officeCard) {
@@ -278,13 +290,25 @@
       setNext(false);
       const tools = toolsEl();
       if (tools) tools.hidden = false;
-      const tick = document.getElementById('match-ticker');
-      if (tick && live.ticker && live.ticker.length) {
-        tick.innerHTML = live.ticker.slice(0, 3).map(function (row) {
-          return '<p>' + row.m + "' " + row.text + '</p>';
-        }).join('');
+      if (!live.ticker || !live.ticker.length) {
+        pushTick(Math.max(1, Math.floor(live.clock || 1)), tx('flow.live', 'Oyun sürüyor.'));
+      } else {
+        const tick = document.getElementById('match-ticker');
+        if (tick) tick.innerHTML = tickerHtml(live);
       }
       updateHud();
+    }
+
+    function escTick(text) {
+      return String(text == null ? '' : text).replace(/[&<>]/g, function (ch) {
+        return ch === '&' ? '&amp;' : ch === '<' ? '&lt;' : '&gt;';
+      });
+    }
+
+    function tickerHtml(live) {
+      return (live.ticker || []).slice(0, 3).map(function (row) {
+        return '<p>' + row.m + "' " + escTick(row.text) + '</p>';
+      }).join('');
     }
 
     function pushTick(minute, text) {
@@ -294,9 +318,7 @@
       if (live.ticker.length > 8) live.ticker.pop();
       const el = document.getElementById('match-ticker');
       if (!el) return;
-      el.innerHTML = live.ticker.slice(0, 3).map(function (row) {
-        return '<p>' + row.m + "' " + row.text + '</p>';
-      }).join('');
+      el.innerHTML = tickerHtml(live);
     }
 
     function armAim(ev) {
@@ -378,6 +400,9 @@
         const tools = toolsEl();
         if (tools) tools.hidden = false;
         setNext(false);
+        if (!live.ticker || !live.ticker.length) {
+          pushTick(Math.max(1, Math.floor(live.clock || 1)), tx('flow.live', 'Oyun sürüyor.'));
+        }
         sfx('whistle');
         updateHud();
         return;

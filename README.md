@@ -42,7 +42,7 @@ Ayarlar’da kariyer bir koda dönüşür. Kodu kopyalayabilir, `yesil-saha.ysav
 
 ## Bulut kayıt
 
-`google-services.json` ve `firebase-config.js` boşken bulut kapalıdır. Ayarlar’da **Yakında** yazar, düğmeler durur. Oyun yerelde çalışmaya devam eder.
+Bulut kayıt proje `legend-striker` ile açıktır. Anonim oturum ve Firestore belgesi `users/{uid}/career/current` kullanılır. Ayarlar son eşitleme saatini gösterir. `google-services.json` Android paketindedir; Crashlytics ve Analytics eklentileri native derlemede durur. Tarayıcıda kayıt REST ile gider, Analytics ölçüm kimliği varsa sayfa olayları gider.
 
 Açmak için sahibinin Firebase ve Play konsolunda yapması gerekenler:
 
@@ -82,7 +82,7 @@ Müzik ve efektler bu proje için üretildi. Üçüncü taraf parça veya lisans
 
 ## Android uygulaması
 
-Sürüm 1.6.1 (versionCode 8). Canlı maçta 22 futbolcu figürü, skor ve dakika. Paket kimliği ve imza aynı kaldı.
+Sürüm 1.7.3 (versionCode 12). Bulut kayıt, Crashlytics ve Analytics açık. Paket kimliği ve imza aynı kaldı.
 
 Sürüm 1.6 notu: Maç akışı, hoca, aile, menajer, hayal kulübü ve uydurma kupalar.
 

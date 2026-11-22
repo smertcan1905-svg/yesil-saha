@@ -81,10 +81,10 @@
       const me = L.clubById(state.clubId);
       const opp = L.clubById(live.oppId);
       const score = document.getElementById('match-score');
-      const left = live.compName ? tr(live.compName) : (me ? labelClub(me, true) : tr('Sen'));
-      const right = live.displayOpp ? tr(live.displayOpp) : (opp ? labelClub(opp, true) : tr('Rakip'));
+      const left = me ? labelClub(me, true) : tr('Sen');
+      const right = opp ? labelClub(opp, true) : (live.displayOpp ? tr(live.displayOpp) : tr('Rakip'));
       if (score) {
-        score.textContent = left + '  ' + L.teamGoals(live.stats) + ' – ' + live.stats.oppGoals + '  ' + right;
+        score.textContent = left + '  ' + L.teamGoals(live.stats) + ' – ' + (live.stats.oppGoals || 0) + '  ' + right;
       }
       const ev = live.events[Math.min(live.cursor, Math.max(0, live.events.length - 1))];
       const minute = document.getElementById('match-minute');
@@ -94,6 +94,10 @@
       }
       const sub = document.getElementById('match-sub');
       if (!sub) return;
+      if (phase === 'live') {
+        sub.textContent = live.compName ? tr(live.compName) : tx('flow.live', 'Oyun sürüyor.');
+        return;
+      }
       if (ev && ev.type === 'chance') {
         const chances = live.events.filter(function (e) { return e.type === 'chance'; });
         const idx = chances.indexOf(ev);
@@ -415,23 +419,67 @@
       showStage(live.stage);
     }
 
+    const LIVE_XI = [
+      { x: 180, y: 86, n: '1', keeper: true, home: false },
+      { x: 54, y: 150, n: '2', home: false },
+      { x: 128, y: 138, n: '4', home: false },
+      { x: 214, y: 138, n: '5', home: false },
+      { x: 300, y: 150, n: '3', home: false },
+      { x: 72, y: 230, n: '6', home: false },
+      { x: 150, y: 214, n: '8', home: false },
+      { x: 230, y: 214, n: '10', home: false },
+      { x: 306, y: 230, n: '7', home: false },
+      { x: 132, y: 300, n: '9', home: false },
+      { x: 228, y: 300, n: '11', home: false },
+      { x: 132, y: 390, n: '11', home: true },
+      { x: 228, y: 390, n: '9', home: true },
+      { x: 72, y: 456, n: '7', home: true },
+      { x: 150, y: 470, n: '10', home: true },
+      { x: 230, y: 470, n: '8', home: true },
+      { x: 306, y: 456, n: '6', home: true },
+      { x: 54, y: 530, n: '3', home: true },
+      { x: 128, y: 544, n: '5', home: true },
+      { x: 214, y: 544, n: '4', home: true },
+      { x: 300, y: 530, n: '2', home: true },
+      { x: 180, y: 575, n: '1', keeper: true, home: true },
+    ];
+
     function drawLive(time) {
       if (cache.width) ctx.drawImage(cache, 0, 0, L.LOG_W, L.LOG_H);
-      const t = time / 1000;
+      const live = state.live || {};
       const me = L.clubById(state.clubId);
-      const mine = me ? me.color : '#15803d';
-      const foe = (state.live && state.live.oppColor) || '#b91c1c';
-      for (let i = 0; i < 10; i++) {
-        const home = i < 5;
-        const x = 40 + (i % 5) * 64 + Math.sin(t + i) * 8;
-        const y = (home ? 360 : 180) + Math.cos(t * 0.8 + i) * 18;
-        ctx.fillStyle = home ? mine : foe;
-        ctx.beginPath();
-        ctx.arc(x, y, 6, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      const bx = 180 + Math.sin(t * 1.4) * 70;
-      const by = 280 + Math.cos(t * 1.1) * 80;
+      const opp = L.clubById(live.oppId);
+      const homeKit = me ? me.color : '#15803d';
+      const homeSecond = me && me.second;
+      const awayKit = (opp && opp.color) || live.oppColor || '#b91c1c';
+      const awaySecond = (opp && opp.second) || live.oppSecond || '#f8fafc';
+      const order = LIVE_XI.map(function (p, i) { return { p: p, i: i }; });
+      order.sort(function (a, b) { return a.p.y - b.p.y; });
+      order.forEach(function (row) {
+        const p = row.p;
+        const i = row.i;
+        const x = p.x + Math.sin(time / 420 + i) * 6;
+        const y = p.y + Math.cos(time / 510 + i * 1.3) * 4;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(0.58, 0.58);
+        drawFigure(0, 0, {
+          jersey: p.home ? homeKit : awayKit,
+          second: p.home ? homeSecond : awaySecond,
+          shorts: '#f8fafc',
+          socks: p.home ? homeKit : awayKit,
+          hair: p.home ? '#1c1917' : '#44403c',
+          number: p.n,
+          keeper: !!p.keeper,
+          gloves: '#fde047',
+          boot: '#111827',
+          running: true,
+          phase: i * 0.7,
+        }, time);
+        ctx.restore();
+      });
+      const bx = 176 + Math.sin(time / 700) * 46;
+      const by = 336 + Math.cos(time / 860) * 28;
       drawBall(bx, by, ballSpin);
     }
 

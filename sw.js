@@ -1,5 +1,5 @@
 /* Çevrimdışı önbellek. Ağ varsa taze dosya, yoksa kayıt. */
-const CACHE = 'yesil-saha-v10';
+const CACHE = 'yesil-saha-v11';
 const ASSETS = [
   './',
   './index.html',
